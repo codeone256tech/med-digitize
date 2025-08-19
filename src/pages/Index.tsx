@@ -1,12 +1,72 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { Auth } from '@/components/Auth';
+import { Dashboard } from '@/components/Dashboard';
+import { Scanner } from '@/components/Scanner';
+import { RecordForm } from '@/components/RecordForm';
+
+type AppState = 'dashboard' | 'scanning' | 'reviewing';
 
 const Index = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+  const { user, loading } = useAuth();
+  const [appState, setAppState] = useState<AppState>('dashboard');
+  const [extractedData, setExtractedData] = useState<{
+    text: string;
+    imageUrl: string;
+  } | null>(null);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
       </div>
+    );
+  }
+
+  if (!user) {
+    return <Auth />;
+  }
+
+  const handleExtracted = (text: string, imageUrl: string) => {
+    setExtractedData({ text, imageUrl });
+    setAppState('reviewing');
+  };
+
+  const handleSaved = () => {
+    setAppState('dashboard');
+    setExtractedData(null);
+  };
+
+  const handleBack = () => {
+    if (appState === 'reviewing') {
+      setAppState('scanning');
+    } else {
+      setAppState('dashboard');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      {appState === 'dashboard' && (
+        <Dashboard onNewScan={() => setAppState('scanning')} />
+      )}
+      
+      {appState === 'scanning' && (
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <Scanner onExtracted={handleExtracted} />
+        </div>
+      )}
+      
+      {appState === 'reviewing' && extractedData && (
+        <div className="p-4">
+          <RecordForm
+            extractedText={extractedData.text}
+            imageUrl={extractedData.imageUrl}
+            onSaved={handleSaved}
+            onBack={handleBack}
+          />
+        </div>
+      )}
     </div>
   );
 };
