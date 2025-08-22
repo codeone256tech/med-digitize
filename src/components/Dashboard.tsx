@@ -4,12 +4,14 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Eye, User, LogOut, Settings, Trash2, MoreVertical } from 'lucide-react';
+import { Search, Plus, Eye, Trash2, MoreVertical, Edit, ArrowUpDown, ArrowUp, ArrowDown, User, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
+import { DashboardSidebar } from './DashboardSidebar';
+import { EditableRecordDialog } from './EditableRecordDialog';
 
 interface MedicalRecord {
   id: string;
@@ -29,6 +31,9 @@ interface DashboardProps {
   onNewScan: () => void;
 }
 
+type SortField = 'patient_name' | 'age' | 'gender' | 'date_recorded';
+type SortDirection = 'asc' | 'desc';
+
 export const Dashboard = ({ onNewScan }: DashboardProps) => {
   const { user, signOut, doctorName } = useAuth();
   const { toast } = useToast();
@@ -36,17 +41,24 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
+  const [editingRecord, setEditingRecord] = useState<MedicalRecord | null>(null);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [currentView, setCurrentView] = useState('records');
+  const [sortField, setSortField] = useState<SortField>('date_recorded');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   useEffect(() => {
     fetchRecords();
   }, []);
 
   const fetchRecords = async () => {
+    if (!user) return;
+    
     try {
       const { data, error } = await supabase
         .from('medical_records')
         .select('*')
+        .eq('doctor_id', user.id) // Only fetch records for current doctor
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -64,15 +76,20 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
   };
 
   const handleDeleteRecord = async (recordId: string) => {
+    if (!user) return;
+    
     try {
       const { error } = await supabase
         .from('medical_records')
         .delete()
-        .eq('id', recordId);
+        .eq('id', recordId)
+        .eq('doctor_id', user.id); // Ensure user can only delete their own records
 
       if (error) throw error;
 
-      setRecords(records.filter(r => r.id !== recordId));
+      // Force refresh from database to ensure consistency
+      await fetchRecords();
+      
       toast({
         title: "Success",
         description: "Record deleted successfully"
@@ -122,10 +139,69 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
     }
   };
 
-  const filteredRecords = records.filter(record =>
-    record.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.patient_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (record.diagnosis && record.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()))
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const handleRecordUpdate = (updatedRecord: MedicalRecord) => {
+    setRecords(records.map(r => r.id === updatedRecord.id ? updatedRecord : r));
+    setEditingRecord(null);
+  };
+
+  const sortedAndFilteredRecords = records
+    .filter(record =>
+      record.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.patient_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (record.diagnosis && record.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+    .sort((a, b) => {
+      let aValue: any, bValue: any;
+      
+      switch (sortField) {
+        case 'patient_name':
+          aValue = a.patient_name.toLowerCase();
+          bValue = b.patient_name.toLowerCase();
+          break;
+        case 'age':
+          aValue = a.age || 0;
+          bValue = b.age || 0;
+          break;
+        case 'gender':
+          aValue = a.gender || '';
+          bValue = b.gender || '';
+          break;
+        case 'date_recorded':
+          aValue = new Date(a.date_recorded).getTime();
+          bValue = new Date(b.date_recorded).getTime();
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <TableHead 
+      className="cursor-pointer hover:bg-muted/50 select-none"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {sortField === field ? (
+          sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-50" />
+        )}
+      </div>
+    </TableHead>
   );
 
   if (loading) {
@@ -137,8 +213,13 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-background flex">
+      <DashboardSidebar 
+        currentView={currentView} 
+        onViewChange={setCurrentView} 
+      />
+      
+      <div className="flex-1 p-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
@@ -153,120 +234,155 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
               <Plus className="mr-2 h-4 w-4" />
               New Scan
             </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <User className="mr-2 h-4 w-4" />
-                  Menu
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => setShowDeleteAccount(true)}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={signOut}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
 
-        {/* Search */}
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by patient name, ID, or diagnosis..."
-                className="pl-10"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        {currentView === 'records' && (
+          <>
+            {/* Search */}
+            <Card className="mb-6">
+              <CardContent className="p-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by patient name, ID, or diagnosis..."
+                    className="pl-10"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Records Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Patient Records ({filteredRecords.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Patient ID</TableHead>
-                    <TableHead>Patient Name</TableHead>
-                    <TableHead>Age</TableHead>
-                    <TableHead>Gender</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Diagnosis</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRecords.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground">
-                        No records found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredRecords.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-mono">
-                          {record.patient_id}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {record.patient_name}
-                        </TableCell>
-                        <TableCell>{record.age || '-'}</TableCell>
-                        <TableCell>
-                          {record.gender ? (
-                            <Badge variant="outline">{record.gender}</Badge>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(record.date_recorded).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="max-w-48 truncate">
-                          {record.diagnosis || '-'}
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              <DropdownMenuItem onClick={() => setSelectedRecord(record)}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => handleDeleteRecord(record.id)}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
+            {/* Records Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Patient Records ({sortedAndFilteredRecords.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Patient ID</TableHead>
+                        <SortableHeader field="patient_name">Patient Name</SortableHeader>
+                        <SortableHeader field="age">Age</SortableHeader>
+                        <SortableHeader field="gender">Gender</SortableHeader>
+                        <SortableHeader field="date_recorded">Date</SortableHeader>
+                        <TableHead>Diagnosis</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {sortedAndFilteredRecords.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center text-muted-foreground">
+                            No records found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        sortedAndFilteredRecords.map((record) => (
+                          <TableRow key={record.id}>
+                            <TableCell className="font-mono">
+                              {record.patient_id}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {record.patient_name}
+                            </TableCell>
+                            <TableCell>{record.age || '-'}</TableCell>
+                            <TableCell>
+                              {record.gender ? (
+                                <Badge variant="outline">{record.gender}</Badge>
+                              ) : '-'}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(record.date_recorded).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="max-w-48 truncate">
+                              {record.diagnosis || '-'}
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                  <DropdownMenuItem onClick={() => setSelectedRecord(record)}>
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setEditingRecord(record)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit Record
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeleteRecord(record.id)}
+                                    className="text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {currentView === 'dashboard' && (
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold mb-4">Dashboard Analytics</h2>
+            <p className="text-muted-foreground">Analytics view coming soon...</p>
+          </div>
+        )}
+
+        {currentView === 'analytics' && (
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold mb-4">Advanced Analytics</h2>
+            <p className="text-muted-foreground">Advanced analytics coming soon...</p>
+          </div>
+        )}
+
+        {currentView === 'search' && (
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold mb-4">Advanced Search</h2>
+            <p className="text-muted-foreground">Advanced search features coming soon...</p>
+          </div>
+        )}
+
+        {currentView === 'settings' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Account Settings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2">Doctor Information</h3>
+                  <p className="text-sm text-muted-foreground">Name: {doctorName}</p>
+                  <p className="text-sm text-muted-foreground">Email: {user?.email}</p>
+                </div>
+                <div className="pt-4 border-t">
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => setShowDeleteAccount(true)}
+                  >
+                    Delete Account
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Record Details Dialog */}
         <Dialog open={!!selectedRecord} onOpenChange={() => setSelectedRecord(null)}>
@@ -324,6 +440,13 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Edit Record Dialog */}
+        <EditableRecordDialog 
+          record={editingRecord}
+          onClose={() => setEditingRecord(null)}
+          onUpdate={handleRecordUpdate}
+        />
 
         {/* Delete Account Dialog */}
         <Dialog open={showDeleteAccount} onOpenChange={setShowDeleteAccount}>
