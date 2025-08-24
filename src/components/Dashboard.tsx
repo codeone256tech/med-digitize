@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { DashboardSidebar } from './DashboardSidebar';
 import { EditableRecordDialog } from './EditableRecordDialog';
 import { MedicalAnalytics } from './MedicalAnalytics';
+import { MedicalDashboard } from './MedicalDashboard';
 import { PatientSearch } from './PatientSearch';
 
 interface MedicalRecord {
@@ -341,7 +342,7 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
         )}
 
         {currentView === 'dashboard' && (
-          <MedicalAnalytics />
+          <MedicalDashboard />
         )}
 
         {currentView === 'analytics' && (
