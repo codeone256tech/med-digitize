@@ -12,6 +12,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 import { DashboardSidebar } from './DashboardSidebar';
 import { EditableRecordDialog } from './EditableRecordDialog';
+import { MedicalAnalytics } from './MedicalAnalytics';
+import { PatientSearch } from './PatientSearch';
 
 interface MedicalRecord {
   id: string;
@@ -339,24 +341,15 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
         )}
 
         {currentView === 'dashboard' && (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold mb-4">Dashboard Analytics</h2>
-            <p className="text-muted-foreground">Analytics view coming soon...</p>
-          </div>
+          <MedicalAnalytics />
         )}
 
         {currentView === 'analytics' && (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold mb-4">Advanced Analytics</h2>
-            <p className="text-muted-foreground">Advanced analytics coming soon...</p>
-          </div>
+          <MedicalAnalytics />
         )}
 
         {currentView === 'search' && (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold mb-4">Advanced Search</h2>
-            <p className="text-muted-foreground">Advanced search features coming soon...</p>
-          </div>
+          <PatientSearch />
         )}
 
         {currentView === 'settings' && (

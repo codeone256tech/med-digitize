@@ -85,13 +85,32 @@ export const DashboardSidebar = ({ currentView, onViewChange }: DashboardSidebar
       <div className="p-2 border-t border-border">
         {!collapsed && (
           <div className="px-3 py-2 mb-2">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <div className="truncate">
-                <p className="text-sm font-medium">{doctorName || 'Doctor'}</p>
-                <p className="text-xs text-muted-foreground">Medical Professional</p>
+            <Button
+              variant="ghost"
+              className="w-full p-2 h-auto justify-start"
+              onClick={signOut}
+            >
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <div className="truncate">
+                  <p className="text-sm font-medium">{doctorName || 'Doctor'}</p>
+                  <p className="text-xs text-muted-foreground">Click to logout</p>
+                </div>
               </div>
-            </div>
+            </Button>
+          </div>
+        )}
+        
+        {collapsed && (
+          <div className="px-3 py-2 mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={signOut}
+              className="w-full justify-center"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         )}
         
@@ -106,18 +125,6 @@ export const DashboardSidebar = ({ currentView, onViewChange }: DashboardSidebar
           >
             <Settings className="h-4 w-4" />
             {!collapsed && <span>Settings</span>}
-          </Button>
-          
-          <Button
-            variant="ghost"
-            className={cn(
-              "w-full justify-start gap-3 text-destructive hover:text-destructive",
-              collapsed && "justify-center px-2"
-            )}
-            onClick={signOut}
-          >
-            <LogOut className="h-4 w-4" />
-            {!collapsed && <span>Logout</span>}
           </Button>
         </div>
       </div>

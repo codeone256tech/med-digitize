@@ -49,8 +49,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+      // Check if user explicitly logged out
+      const userLoggedOut = localStorage.getItem('user_logged_out');
+      
+      if (session?.user && !userLoggedOut) {
+        setSession(session);
+        setUser(session.user);
+        fetchDoctorProfile(session.user.id);
+      } else {
+        // Clear session if user logged out
+        if (userLoggedOut) {
+          localStorage.removeItem('user_logged_out');
+          supabase.auth.signOut({ scope: 'global' });
+        }
+        setSession(null);
+        setUser(null);
+      }
       setLoading(false);
     });
 
@@ -134,24 +148,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const fetchDoctorProfile = async (userId: string) => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('doctor_name')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (profile) {
+        setDoctorName(profile.doctor_name);
+      }
+    } catch (error) {
+      console.error('Error fetching doctor profile:', error);
+    }
+  };
+
   const signOut = async () => {
     try {
-      // Clean up auth state
       cleanupAuthState();
-      
-      // Attempt global sign out
-      try {
-        await supabase.auth.signOut({ scope: 'global' });
-      } catch (err) {
-        // Ignore errors
-      }
-      
-      setDoctorName(null);
-      
-      // Force page reload for clean state
-      window.location.href = '/auth';
+      await supabase.auth.signOut({ scope: 'global' });
+      setUser(null);
+      setSession(null);
+      setDoctorName('');
+      // Save the fact that user logged out to prevent auto-session restore
+      localStorage.setItem('user_logged_out', 'true');
+      window.location.href = '/';
     } catch (error) {
-      console.error('Error during logout:', error);
+      console.error('Error signing out:', error);
+      // Force navigation even if signOut fails
+      window.location.href = '/';
     }
   };
 

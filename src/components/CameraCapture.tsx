@@ -74,18 +74,12 @@ export const CameraCapture = ({ onCapture, onBack, onUploadMode }: CameraCapture
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <Camera className="h-5 w-5" />
             Capture Medical Record
-          </div>
-          <Button variant="outline" size="sm" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-        </CardTitle>
-      </CardHeader>
+          </CardTitle>
+        </CardHeader>
       <CardContent className="space-y-4">
         <div className="relative aspect-[4/3] bg-black rounded-lg overflow-hidden">
           <CameraPro
@@ -132,6 +126,13 @@ export const CameraCapture = ({ onCapture, onBack, onUploadMode }: CameraCapture
           <p>• Position the medical record clearly in the camera view</p>
           <p>• Ensure good lighting and avoid shadows</p>
           <p>• Keep the document flat and avoid glare</p>
+        </div>
+        
+        <div className="flex justify-center mt-4">
+          <Button variant="outline" onClick={onBack}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Options
+          </Button>
         </div>
       </CardContent>
     </Card>

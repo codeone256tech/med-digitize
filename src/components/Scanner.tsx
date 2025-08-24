@@ -159,18 +159,12 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <Camera className="h-5 w-5" />
             Scan Medical Record
-          </div>
-          <Button variant="outline" size="sm" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-        </CardTitle>
-      </CardHeader>
+          </CardTitle>
+        </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 gap-4">
           <Button
@@ -195,6 +189,13 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
           <p className="font-medium">Choose how to scan your medical record:</p>
           <p>• <strong>Camera:</strong> Take a live photo with your device camera</p>
           <p>• <strong>Upload:</strong> Select an existing image file</p>
+        </div>
+        
+        <div className="flex justify-center mt-4">
+          <Button variant="outline" onClick={onBack}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Dashboard
+          </Button>
         </div>
       </CardContent>
     </Card>

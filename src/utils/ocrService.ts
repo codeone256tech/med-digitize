@@ -15,7 +15,29 @@ export class OCRService {
       const result = await Tesseract.recognize(imageFile, 'eng', {
         logger: m => console.log(m)
       });
-      return result.data.text;
+      
+      // Post-process for medical handwriting
+      let text = result.data.text;
+      
+      // Common OCR corrections for medical handwriting
+      const corrections = {
+        'l': 'I', // lowercase l often mistaken for I
+        'rn': 'm', // rn combination often mistaken for m
+        'vv': 'w', // double v for w
+        '6': 'G', // 6 often mistaken for G in handwriting
+        '0': 'O', // 0 often mistaken for O
+        '5': 'S', // 5 often mistaken for S
+        'ii': 'n', // double i for n
+        'cl': 'd', // cl combination for d
+      };
+      
+      // Apply corrections while preserving word boundaries
+      for (const [wrong, correct] of Object.entries(corrections)) {
+        const regex = new RegExp(`\\b${wrong}\\b`, 'gi');
+        text = text.replace(regex, correct);
+      }
+      
+      return text;
     } catch (error) {
       console.error('OCR Error:', error);
       throw new Error('Failed to extract text from image');
@@ -34,14 +56,14 @@ export class OCRService {
       prescription: ''
     };
 
-    // Enhanced pattern matching for medical records
+    // Enhanced pattern matching for medical records with fuzzy matching
     const patterns = {
-      name: /(?:name|patient|pt)[:\s]*([a-zA-Z\s.]+)/i,
-      age: /(?:age|dob|birth)[:\s]*(\d{1,3}|\d{2}\/\d{2}\/\d{4})/i,
-      gender: /(?:gender|sex|m\/f)[:\s]*(male|female|m|f)/i,
-      date: /(?:date|dated)[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
-      diagnosis: /(?:diagnosis|dx|condition|problem)[:\s]*([^\.]+)/i,
-      prescription: /(?:prescription|rx|medication|medicine|drug)[:\s]*([^\.]+)/i
+      name: /(?:name|patient|pt|mr|mrs|miss|dr)[:\s]*([a-zA-Z\s.'-]+)/i,
+      age: /(?:age|yrs?|years?|y\/o|born)[:\s]*(\d{1,3}|[1-9]\d?)/i,
+      gender: /(?:gender|sex|male|female|m\/f|patient)[:\s]*(male|female|m|f|man|woman)/i,
+      date: /(?:date|visit|seen|examined|today)[:\s]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+      diagnosis: /(?:diagnosis|dx|condition|problem|complain|chief|complaint|presenting)[:\s]*([^,\n\r]+)/i,
+      prescription: /(?:prescription|rx|medication|medicine|drug|treatment|advised|prescribed)[:\s]*([^,\n\r]+)/i
     };
 
     // Extract using patterns

@@ -53,7 +53,7 @@ const Index = () => {
       
       {appState === 'scanning' && (
         <div className="min-h-screen flex items-center justify-center p-4">
-          <Scanner onExtracted={handleExtracted} />
+          <Scanner onExtracted={handleExtracted} onBack={handleBack} />
         </div>
       )}
       
