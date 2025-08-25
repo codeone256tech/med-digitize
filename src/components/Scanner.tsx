@@ -1,10 +1,17 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Camera, Upload, Loader2, ArrowLeft } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Camera, Upload, Loader2, ArrowLeft, Save, Edit } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { OCRService } from '@/utils/ocrService';
+import { OCRService, ExtractedFields } from '@/utils/ocrService';
+import { AIService } from '@/services/aiService';
 import { CameraCapture } from './CameraCapture';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ScannerProps {
   onExtracted: (text: string, imageUrl: string) => void;
@@ -17,6 +24,15 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
   const [mode, setMode] = useState<'select' | 'camera' | 'upload' | 'manual'>('select');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [manualFields, setManualFields] = useState<ExtractedFields>({
+    patientName: '',
+    age: '',
+    gender: '',
+    date: new Date().toISOString().split('T')[0],
+    diagnosis: '',
+    prescription: ''
+  });
 
   const processImage = async (imageSource: File | string) => {
     setIsProcessing(true);
@@ -49,11 +65,17 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
         throw new Error('No text could be extracted from the image');
       }
 
-      onExtracted(extractedText, imageUrl);
+      // Enhance extraction with AI
+      console.log('Enhancing extraction with AI...');
+      const enhancedFields = await AIService.enhanceExtraction(extractedText);
+      
+      // Pass enhanced data in a format that RecordForm can understand
+      const enhancedText = JSON.stringify(enhancedFields);
+      onExtracted(enhancedText, imageUrl);
       
       toast({
         title: "Success",
-        description: "Text extracted successfully from image",
+        description: "Text extracted and enhanced successfully",
       });
       
     } catch (error) {
@@ -77,9 +99,59 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
     await processImage(imageDataUrl);
   };
 
-  const handleManualInput = () => {
-    // For manual input, we pass empty text and no image
-    onExtracted('', '');
+  const handleManualSave = async () => {
+    if (!user) return;
+    
+    if (!manualFields.patientName.trim()) {
+      toast({
+        title: "Error",
+        description: "Patient name is required",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    try {
+      // Generate patient ID
+      const patientId = OCRService.generatePatientId(manualFields.patientName);
+
+      // Save to database
+      const { error } = await supabase
+        .from('medical_records')
+        .insert({
+          patient_id: patientId,
+          patient_name: manualFields.patientName,
+          age: manualFields.age ? parseInt(manualFields.age) : null,
+          gender: manualFields.gender || null,
+          date_recorded: manualFields.date || new Date().toISOString().split('T')[0],
+          diagnosis: manualFields.diagnosis || null,
+          prescription: manualFields.prescription || null,
+          raw_text: 'Manual entry',
+          image_url: null,
+          doctor_id: user.id
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Medical record saved successfully",
+      });
+      
+      onBack();
+      
+    } catch (error) {
+      console.error('Save error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save medical record",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const triggerFileInput = () => {
@@ -98,37 +170,108 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
 
   if (mode === 'manual') {
     return (
-      <Card className="w-full max-w-2xl mx-auto">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Manual Record Entry
+      <div className="w-full max-w-2xl mx-auto space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => setMode('select')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          <h2 className="text-2xl font-bold">Manual Entry</h2>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Patient Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="manual-patientName">Patient Name *</Label>
+              <Input
+                id="manual-patientName"
+                value={manualFields.patientName}
+                onChange={(e) => setManualFields({...manualFields, patientName: e.target.value})}
+                placeholder="Enter patient name"
+              />
             </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-center space-y-4">
-            <p className="text-muted-foreground">
-              Enter patient information manually without scanning any document.
-            </p>
             
-            <Button
-              onClick={handleManualInput}
-              className="w-full h-16 text-lg"
-            >
-              <Upload className="mr-2 h-6 w-6" />
-              Start Manual Entry
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="manual-age">Age</Label>
+                <Input
+                  id="manual-age"
+                  value={manualFields.age}
+                  onChange={(e) => setManualFields({...manualFields, age: e.target.value})}
+                  placeholder="Age"
+                  type="number"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="manual-gender">Gender</Label>
+                <Select
+                  value={manualFields.gender}
+                  onValueChange={(value) => setManualFields({...manualFields, gender: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Male">Male</SelectItem>
+                    <SelectItem value="Female">Female</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="manual-date">Date</Label>
+              <Input
+                id="manual-date"
+                type="date"
+                value={manualFields.date}
+                onChange={(e) => setManualFields({...manualFields, date: e.target.value})}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="manual-diagnosis">Diagnosis</Label>
+              <Textarea
+                id="manual-diagnosis"
+                value={manualFields.diagnosis}
+                onChange={(e) => setManualFields({...manualFields, diagnosis: e.target.value})}
+                placeholder="Enter diagnosis"
+                rows={3}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="manual-prescription">Prescription</Label>
+              <Textarea
+                id="manual-prescription"
+                value={manualFields.prescription}
+                onChange={(e) => setManualFields({...manualFields, prescription: e.target.value})}
+                placeholder="Enter prescription"
+                rows={3}
+              />
+            </div>
+
+            <Button onClick={handleManualSave} className="w-full" disabled={isProcessing}>
+              {isProcessing ? (
+                <>
+                  <Save className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Record
+                </>
+              )}
             </Button>
-          </div>
-          
-          <div className="flex justify-center gap-4 pt-4">
-            <Button variant="outline" onClick={() => setMode('select')}>
-              Back to Options
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -191,7 +334,7 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
           
           <p className="text-sm text-muted-foreground text-center">
             Upload a photo of a handwritten or printed medical record. 
-            The system will automatically extract patient information.
+            The system will automatically extract patient information using AI.
           </p>
         </CardContent>
       </Card>
@@ -230,7 +373,7 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
             variant="secondary"
             className="w-full h-16 text-lg"
           >
-            <Upload className="mr-2 h-6 w-6" />
+            <Edit className="mr-2 h-6 w-6" />
             Manual Entry
           </Button>
         </div>

@@ -22,9 +22,18 @@ export const RecordForm = ({ extractedText, imageUrl, onSaved, onBack }: RecordF
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [fields, setFields] = useState<ExtractedFields>(() => 
-    OCRService.extractFields(extractedText)
-  );
+  const [fields, setFields] = useState<ExtractedFields>(() => {
+    // Try to parse as enhanced JSON first
+    try {
+      const parsed = JSON.parse(extractedText);
+      if (parsed.patientName !== undefined) {
+        return parsed;
+      }
+    } catch (e) {
+      // Fall back to basic extraction
+    }
+    return OCRService.extractFields(extractedText);
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -193,7 +202,7 @@ export const RecordForm = ({ extractedText, imageUrl, onSaved, onBack }: RecordF
 
         <Card>
           <CardHeader>
-            <CardTitle>Original Image & Raw Text</CardTitle>
+            <CardTitle>Original Image</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {imageUrl && (
@@ -205,16 +214,6 @@ export const RecordForm = ({ extractedText, imageUrl, onSaved, onBack }: RecordF
                 />
               </div>
             )}
-            
-            <div className="space-y-2">
-              <Label>Extracted Raw Text</Label>
-              <Textarea
-                value={extractedText}
-                readOnly
-                rows={8}
-                className="font-mono text-sm"
-              />
-            </div>
           </CardContent>
         </Card>
       </div>

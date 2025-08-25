@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 
 interface MedicalRecord {
   id: string;
@@ -35,6 +36,7 @@ interface MedicalRecord {
 
 export const MedicalDashboard = () => {
   const { user, doctorName } = useAuth();
+  const { toast } = useToast();
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -383,17 +385,63 @@ export const MedicalDashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button variant="outline" className="h-20 flex flex-col items-center justify-center">
+            <Button 
+              variant="outline" 
+              className="h-20 flex flex-col items-center justify-center"
+              onClick={() => setSearchTerm('')}
+            >
               <FileText className="h-6 w-6 mb-2" />
               <span>View All Records</span>
+              <span className="text-xs text-muted-foreground">{records.length} total</span>
             </Button>
-            <Button variant="outline" className="h-20 flex flex-col items-center justify-center">
+            <Button 
+              variant="outline" 
+              className="h-20 flex flex-col items-center justify-center"
+              onClick={() => {
+                const input = document.querySelector('input[placeholder="Search patients..."]') as HTMLInputElement;
+                if (input) input.focus();
+              }}
+            >
               <Search className="h-6 w-6 mb-2" />
               <span>Advanced Search</span>
+              <span className="text-xs text-muted-foreground">Filter records</span>
             </Button>
-            <Button variant="outline" className="h-20 flex flex-col items-center justify-center">
+            <Button 
+              variant="outline" 
+              className="h-20 flex flex-col items-center justify-center"
+              onClick={() => {
+                const csvContent = [
+                  ['Patient Name', 'Patient ID', 'Age', 'Gender', 'Date Recorded', 'Diagnosis', 'Prescription'],
+                  ...records.map(record => [
+                    record.patient_name,
+                    record.patient_id,
+                    record.age?.toString() || '',
+                    record.gender || '',
+                    record.date_recorded,
+                    record.diagnosis || '',
+                    record.prescription || ''
+                  ])
+                ].map(row => row.join(',')).join('\n');
+                
+                const blob = new Blob([csvContent], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `medical_records_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                toast({
+                  title: "Export Complete",
+                  description: `Downloaded ${records.length} records as CSV`
+                });
+              }}
+            >
               <TrendingUp className="h-6 w-6 mb-2" />
-              <span>Generate Report</span>
+              <span>Export Report</span>
+              <span className="text-xs text-muted-foreground">Download CSV</span>
             </Button>
           </div>
         </CardContent>
