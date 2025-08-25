@@ -14,7 +14,7 @@ interface ScannerProps {
 export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
-  const [mode, setMode] = useState<'select' | 'camera' | 'upload'>('select');
+  const [mode, setMode] = useState<'select' | 'camera' | 'upload' | 'manual'>('select');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -77,6 +77,11 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
     await processImage(imageDataUrl);
   };
 
+  const handleManualInput = () => {
+    // For manual input, we pass empty text and no image
+    onExtracted('', '');
+  };
+
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
@@ -88,6 +93,42 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
         onBack={() => setMode('select')}
         onUploadMode={() => setMode('upload')}
       />
+    );
+  }
+
+  if (mode === 'manual') {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Manual Record Entry
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-center space-y-4">
+            <p className="text-muted-foreground">
+              Enter patient information manually without scanning any document.
+            </p>
+            
+            <Button
+              onClick={handleManualInput}
+              className="w-full h-16 text-lg"
+            >
+              <Upload className="mr-2 h-6 w-6" />
+              Start Manual Entry
+            </Button>
+          </div>
+          
+          <div className="flex justify-center gap-4 pt-4">
+            <Button variant="outline" onClick={() => setMode('select')}>
+              Back to Options
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -183,15 +224,25 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
             <Upload className="mr-2 h-6 w-6" />
             Upload from Files
           </Button>
+
+          <Button
+            onClick={() => setMode('manual')}
+            variant="secondary"
+            className="w-full h-16 text-lg"
+          >
+            <Upload className="mr-2 h-6 w-6" />
+            Manual Entry
+          </Button>
         </div>
         
         <div className="text-sm text-muted-foreground text-center space-y-1">
-          <p className="font-medium">Choose how to scan your medical record:</p>
+          <p className="font-medium">Choose how to create your medical record:</p>
           <p>• <strong>Camera:</strong> Take a live photo with your device camera</p>
           <p>• <strong>Upload:</strong> Select an existing image file</p>
+          <p>• <strong>Manual Entry:</strong> Type patient information directly</p>
         </div>
         
-        <div className="flex justify-center mt-4">
+        <div className="flex justify-center mt-6 pt-4 border-t">
           <Button variant="outline" onClick={onBack}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Dashboard

@@ -5,20 +5,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  Calendar, 
-  Clock, 
   Users, 
   AlertTriangle, 
   Activity, 
-  Pill, 
   Search, 
   Bell, 
   TrendingUp,
   Heart,
   Stethoscope,
   FileText,
-  MessageSquare,
-  Plus
+  Plus,
+  Calendar,
+  Filter
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -64,50 +62,34 @@ export const MedicalDashboard = () => {
     }
   };
 
-  // Calculate dashboard stats
+  // Calculate real dashboard stats
   const today = new Date().toISOString().split('T')[0];
   const thisWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const thisMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   
   const todayRecords = records.filter(r => r.date_recorded === today);
   const weekRecords = records.filter(r => r.date_recorded >= thisWeek);
-  const recentPatients = records.slice(0, 5);
+  const monthRecords = records.filter(r => r.date_recorded >= thisMonth);
+  const recentPatients = records.slice(0, 8);
   
-  // Mock data for appointments (in real app, this would come from appointments table)
-  const todayAppointments = [
-    { id: '1', patient: 'Sarah Johnson', time: '09:00', status: 'checked-in' },
-    { id: '2', patient: 'Michael Brown', time: '10:30', status: 'pending' },
-    { id: '3', patient: 'Emma Davis', time: '14:00', status: 'pending' },
-    { id: '4', patient: 'James Wilson', time: '15:30', status: 'pending' },
-  ];
-
-  const notifications = [
-    { id: '1', type: 'critical', message: 'Patient X has abnormal lab results', time: '2 hours ago' },
-    { id: '2', type: 'reminder', message: 'Prescription renewal due for Patient Y', time: '4 hours ago' },
-    { id: '3', type: 'appointment', message: 'New appointment scheduled for tomorrow', time: '1 day ago' },
-  ];
-
   const highRiskPatients = records
     .filter(r => r.diagnosis?.toLowerCase().includes('diabetes') || 
                  r.diagnosis?.toLowerCase().includes('hypertension') ||
-                 r.diagnosis?.toLowerCase().includes('cardiac'))
-    .slice(0, 3);
+                 r.diagnosis?.toLowerCase().includes('cardiac') ||
+                 r.diagnosis?.toLowerCase().includes('heart'))
+    .slice(0, 5);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'checked-in': return 'bg-green-500';
-      case 'pending': return 'bg-yellow-500';
-      default: return 'bg-gray-500';
-    }
-  };
+  const criticalRecords = records.filter(r => 
+    r.diagnosis?.toLowerCase().includes('critical') ||
+    r.diagnosis?.toLowerCase().includes('urgent') ||
+    r.diagnosis?.toLowerCase().includes('emergency')
+  );
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'critical': return <AlertTriangle className="h-4 w-4 text-red-500" />;
-      case 'reminder': return <Clock className="h-4 w-4 text-yellow-500" />;
-      case 'appointment': return <Calendar className="h-4 w-4 text-blue-500" />;
-      default: return <Bell className="h-4 w-4" />;
-    }
-  };
+  const filteredRecords = records.filter(r => 
+    r.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.patient_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (r.diagnosis && r.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   if (loading) {
     return (
@@ -122,12 +104,12 @@ export const MedicalDashboard = () => {
       {/* Welcome Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Good morning, Dr. {doctorName}</h1>
-          <p className="text-muted-foreground">Here's what's happening with your patients today</p>
+          <h1 className="text-3xl font-bold">Medical Records Dashboard</h1>
+          <p className="text-muted-foreground">Welcome back, Dr. {doctorName}</p>
         </div>
         <div className="text-right">
           <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString()}</p>
-          <p className="text-lg font-semibold">{todayAppointments.length} appointments today</p>
+          <p className="text-lg font-semibold">{records.length} total records</p>
         </div>
       </div>
 
@@ -138,7 +120,7 @@ export const MedicalDashboard = () => {
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-blue-500" />
               <div>
-                <p className="text-sm text-muted-foreground">Today's Patients</p>
+                <p className="text-sm text-muted-foreground">Today's Records</p>
                 <p className="text-2xl font-bold">{todayRecords.length}</p>
               </div>
             </div>
@@ -150,8 +132,8 @@ export const MedicalDashboard = () => {
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-green-500" />
               <div>
-                <p className="text-sm text-muted-foreground">This Week</p>
-                <p className="text-2xl font-bold">{weekRecords.length}</p>
+                <p className="text-sm text-muted-foreground">This Month</p>
+                <p className="text-2xl font-bold">{monthRecords.length}</p>
               </div>
             </div>
           </CardContent>
@@ -183,102 +165,58 @@ export const MedicalDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Today's Appointments */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Today's Appointments
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {todayAppointments.map((appointment) => (
-                <div key={appointment.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{appointment.patient}</p>
-                    <p className="text-sm text-muted-foreground">{appointment.time}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${getStatusColor(appointment.status)}`}></div>
-                    <span className="text-xs capitalize">{appointment.status}</span>
-                  </div>
-                </div>
-              ))}
-              <Button variant="outline" className="w-full mt-3">
-                <Plus className="h-4 w-4 mr-2" />
-                Schedule New
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Recent Patients */}
-        <Card className="lg:col-span-1">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              Recent Patients
+              Recent Patient Records
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {recentPatients.map((patient) => (
-                <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{patient.patient_name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {patient.age ? `${patient.age}y` : ''} {patient.gender ? ` • ${patient.gender}` : ''}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(patient.date_recorded).toLocaleDateString()}
-                    </p>
-                    {patient.diagnosis && (
-                      <Badge variant="outline" className="text-xs mt-1">
-                        {patient.diagnosis.slice(0, 20)}...
-                      </Badge>
-                    )}
-                  </div>
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {recentPatients.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No patient records yet</p>
+                  <p className="text-sm">Start by scanning or creating your first record</p>
                 </div>
-              ))}
+              ) : (
+                recentPatients.map((patient) => (
+                  <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
+                    <div>
+                      <p className="font-medium">{patient.patient_name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        ID: {patient.patient_id}
+                        {patient.age && ` • ${patient.age}y`}
+                        {patient.gender && ` • ${patient.gender}`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(patient.date_recorded).toLocaleDateString()}
+                      </p>
+                      {patient.diagnosis && (
+                        <Badge variant="outline" className="text-xs mt-1">
+                          {patient.diagnosis.length > 25 ? 
+                            `${patient.diagnosis.slice(0, 25)}...` : 
+                            patient.diagnosis}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Notifications & Alerts */}
+        {/* Quick Search & Actions */}
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              Notifications
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {notifications.map((notification) => (
-                <div key={notification.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                  {getNotificationIcon(notification.type)}
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{notification.message}</p>
-                    <p className="text-xs text-muted-foreground">{notification.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Patient Search & AI Insights */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Quick Patient Search */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
               <Search className="h-5 w-5" />
-              Quick Patient Search
+              Quick Search
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -286,7 +224,7 @@ export const MedicalDashboard = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by name, ID, or condition..."
+                  placeholder="Search patients..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -295,100 +233,139 @@ export const MedicalDashboard = () => {
               
               {searchTerm && (
                 <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {records
-                    .filter(r => 
-                      r.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      r.patient_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      (r.diagnosis && r.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()))
-                    )
-                    .slice(0, 5)
-                    .map((patient) => (
-                      <div key={patient.id} className="p-2 border rounded cursor-pointer hover:bg-muted">
-                        <p className="font-medium">{patient.patient_name}</p>
-                        <p className="text-sm text-muted-foreground">{patient.patient_id}</p>
-                      </div>
-                    ))
-                  }
+                  {filteredRecords.slice(0, 5).map((patient) => (
+                    <div key={patient.id} className="p-2 border rounded cursor-pointer hover:bg-muted text-sm">
+                      <p className="font-medium">{patient.patient_name}</p>
+                      <p className="text-xs text-muted-foreground">{patient.patient_id}</p>
+                    </div>
+                  ))}
+                  {filteredRecords.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-2">No records found</p>
+                  )}
                 </div>
               )}
               
-              <div className="pt-2 border-t">
-                <p className="text-sm font-medium mb-2">AI Suggestions:</p>
-                <div className="space-y-1">
-                  <Button variant="ghost" size="sm" className="w-full justify-start">
-                    <TrendingUp className="h-4 w-4 mr-2" />
-                    Patients with abnormal vitals this week
-                  </Button>
-                  <Button variant="ghost" size="sm" className="w-full justify-start">
-                    <Heart className="h-4 w-4 mr-2" />
-                    High-risk cardiovascular patients
-                  </Button>
-                </div>
+              <div className="pt-2 border-t space-y-2">
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filter by condition
+                </Button>
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Filter by date range
+                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
+      </div>
 
-        {/* AI Health Insights */}
+      {/* Medical Insights & High Risk Patients */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* High Risk Patients */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              AI Health Insights
+              <AlertTriangle className="h-5 w-5" />
+              High Risk Patients
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="trends" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="trends">Trends</TabsTrigger>
-                <TabsTrigger value="risks">High Risk</TabsTrigger>
-                <TabsTrigger value="predictions">Predictions</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="trends" className="space-y-3">
-                <div className="p-3 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className="h-4 w-4 text-green-500" />
-                    <span className="font-medium">Blood Pressure Trends</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">15% improvement in hypertensive patients this month</p>
+            <div className="space-y-3">
+              {highRiskPatients.length === 0 ? (
+                <div className="text-center text-muted-foreground py-4">
+                  <Heart className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No high-risk patients identified</p>
                 </div>
-                <div className="p-3 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Heart className="h-4 w-4 text-blue-500" />
-                    <span className="font-medium">Diabetes Management</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">Average HbA1c levels decreasing by 0.3%</p>
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="risks" className="space-y-3">
-                {highRiskPatients.map((patient) => (
+              ) : (
+                highRiskPatients.map((patient) => (
                   <div key={patient.id} className="p-3 border rounded-lg">
                     <div className="flex items-center gap-2 mb-1">
                       <AlertTriangle className="h-4 w-4 text-red-500" />
                       <span className="font-medium">{patient.patient_name}</span>
                     </div>
                     <p className="text-sm text-muted-foreground">{patient.diagnosis}</p>
-                    <Badge variant="destructive" className="mt-1">High Risk</Badge>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Recorded: {new Date(patient.date_recorded).toLocaleDateString()}
+                    </p>
+                    <Badge variant="destructive" className="mt-2">High Risk</Badge>
                   </div>
-                ))}
-              </TabsContent>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Record Statistics */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Record Statistics
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="overview" className="space-y-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="trends">Trends</TabsTrigger>
+              </TabsList>
               
-              <TabsContent value="predictions" className="space-y-3">
+              <TabsContent value="overview" className="space-y-3">
                 <div className="p-3 border rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
-                    <Clock className="h-4 w-4 text-orange-500" />
-                    <span className="font-medium">Follow-up Predictions</span>
+                    <TrendingUp className="h-4 w-4 text-green-500" />
+                    <span className="font-medium">Records This Week</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">3 patients likely need follow-up within 7 days</p>
+                  <p className="text-2xl font-bold">{weekRecords.length}</p>
+                  <p className="text-sm text-muted-foreground">Patient records created</p>
                 </div>
                 <div className="p-3 border rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
-                    <Pill className="h-4 w-4 text-purple-500" />
-                    <span className="font-medium">Medication Adherence</span>
+                    <Heart className="h-4 w-4 text-blue-500" />
+                    <span className="font-medium">Unique Patients</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">2 patients may have medication compliance issues</p>
+                  <p className="text-2xl font-bold">
+                    {new Set(records.map(r => r.patient_id)).size}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Individual patients</p>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="trends" className="space-y-3">
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Stethoscope className="h-4 w-4 text-purple-500" />
+                    <span className="font-medium">Most Common Conditions</span>
+                  </div>
+                  <div className="space-y-1">
+                    {records
+                      .filter(r => r.diagnosis)
+                      .reduce((acc, record) => {
+                        const diagnosis = record.diagnosis!.toLowerCase();
+                        if (diagnosis.includes('diabetes')) acc.diabetes = (acc.diabetes || 0) + 1;
+                        if (diagnosis.includes('hypertension')) acc.hypertension = (acc.hypertension || 0) + 1;
+                        if (diagnosis.includes('fever')) acc.fever = (acc.fever || 0) + 1;
+                        return acc;
+                      }, {} as Record<string, number>)
+                      && Object.entries(records
+                        .filter(r => r.diagnosis)
+                        .reduce((acc, record) => {
+                          const diagnosis = record.diagnosis!.toLowerCase();
+                          if (diagnosis.includes('diabetes')) acc.diabetes = (acc.diabetes || 0) + 1;
+                          if (diagnosis.includes('hypertension')) acc.hypertension = (acc.hypertension || 0) + 1;
+                          if (diagnosis.includes('fever')) acc.fever = (acc.fever || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>))
+                        .slice(0, 3)
+                        .map(([condition, count]) => (
+                          <div key={condition} className="flex justify-between text-sm">
+                            <span className="capitalize">{condition}</span>
+                            <span className="font-medium">{count}</span>
+                          </div>
+                        ))
+                    }
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
@@ -396,95 +373,31 @@ export const MedicalDashboard = () => {
         </Card>
       </div>
 
-      {/* Recent Activities & Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Lab Results */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Stethoscope className="h-5 w-5" />
-              Recent Lab Results
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="p-3 border rounded-lg">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-medium">Complete Blood Count</span>
-                  <Badge variant="destructive">Abnormal</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">Patient: Sarah Johnson</p>
-                <p className="text-xs text-muted-foreground">2 hours ago</p>
-              </div>
-              <div className="p-3 border rounded-lg">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-medium">Lipid Panel</span>
-                  <Badge variant="outline">Normal</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">Patient: Michael Brown</p>
-                <p className="text-xs text-muted-foreground">4 hours ago</p>
-              </div>
-              <div className="p-3 border rounded-lg">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-medium">HbA1c Test</span>
-                  <Badge variant="secondary">Pending</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">Patient: Emma Davis</p>
-                <p className="text-xs text-muted-foreground">1 day ago</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Messages & Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
-              Messages & Quick Actions
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <h4 className="font-medium">Recent Messages</h4>
-                <div className="p-3 border rounded-lg">
-                  <p className="text-sm font-medium">Nurse Station</p>
-                  <p className="text-sm text-muted-foreground">Patient in Room 302 requesting pain medication</p>
-                  <p className="text-xs text-muted-foreground">15 minutes ago</p>
-                </div>
-                <div className="p-3 border rounded-lg">
-                  <p className="text-sm font-medium">Lab Department</p>
-                  <p className="text-sm text-muted-foreground">Urgent lab results available for review</p>
-                  <p className="text-xs text-muted-foreground">1 hour ago</p>
-                </div>
-              </div>
-              
-              <div className="pt-4 border-t space-y-2">
-                <h4 className="font-medium">Quick Actions</h4>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" size="sm">
-                    <Pill className="h-4 w-4 mr-2" />
-                    Prescriptions
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Lab Orders
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Schedule
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Messages
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Plus className="h-5 w-5" />
+            Quick Actions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Button variant="outline" className="h-20 flex flex-col items-center justify-center">
+              <FileText className="h-6 w-6 mb-2" />
+              <span>View All Records</span>
+            </Button>
+            <Button variant="outline" className="h-20 flex flex-col items-center justify-center">
+              <Search className="h-6 w-6 mb-2" />
+              <span>Advanced Search</span>
+            </Button>
+            <Button variant="outline" className="h-20 flex flex-col items-center justify-center">
+              <TrendingUp className="h-6 w-6 mb-2" />
+              <span>Generate Report</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
