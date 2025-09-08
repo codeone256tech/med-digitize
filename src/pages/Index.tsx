@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Auth } from '@/components/Auth';
 import { Dashboard } from '@/components/Dashboard';
+import { AdminDashboard } from '@/components/AdminDashboard';
 import { Scanner } from '@/components/Scanner';
 import { RecordForm } from '@/components/RecordForm';
 
 type AppState = 'dashboard' | 'scanning' | 'reviewing';
 
 const Index = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, userRole } = useAuth();
   const [appState, setAppState] = useState<AppState>('dashboard');
   const [extractedData, setExtractedData] = useState<{
     text: string;
@@ -47,7 +48,11 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {appState === 'dashboard' && (
+      {appState === 'dashboard' && userRole === 'admin' && (
+        <AdminDashboard />
+      )}
+      
+      {appState === 'dashboard' && userRole !== 'admin' && (
         <Dashboard onNewScan={() => setAppState('scanning')} />
       )}
       

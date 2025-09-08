@@ -7,10 +7,11 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (email: string, password: string, doctorName: string) => Promise<{ error?: string }>;
+  signIn: (username: string, password: string) => Promise<{ error?: string }>;
+  signUp: (name: string, username: string, email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   doctorName: string | null;
+  userRole: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -20,6 +21,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [doctorName, setDoctorName] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -33,16 +35,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setTimeout(async () => {
             const { data: profile } = await supabase
               .from('profiles')
-              .select('doctor_name')
+              .select('doctor_name, role')
               .eq('user_id', session.user.id)
               .maybeSingle();
             
             if (profile) {
               setDoctorName(profile.doctor_name);
+              setUserRole(profile.role);
             }
           }, 0);
         } else {
           setDoctorName(null);
+          setUserRole(null);
         }
         setLoading(false);
       }
@@ -86,7 +90,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (username: string, password: string) => {
     try {
       // Clean up existing state
       cleanupAuthState();
@@ -98,13 +102,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Continue even if this fails
       }
 
+      // First, find the user by username to get their email
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('username', username)
+        .maybeSingle();
+
+      if (profileError || !profile?.email) {
+        return { error: 'Invalid username or password' };
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: profile.email,
         password,
       });
 
       if (error) {
-        return { error: error.message };
+        return { error: 'Invalid username or password' };
       }
 
       // Force page reload for clean state
@@ -118,8 +133,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, doctorName: string) => {
+  const signUp = async (name: string, username: string, email: string, password: string) => {
     try {
+      // Check if username already exists
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', username)
+        .maybeSingle();
+
+      if (existingProfile) {
+        return { error: 'Username already exists' };
+      }
+
       const redirectUrl = `${window.location.origin}/`;
       
       const { error } = await supabase.auth.signUp({
@@ -128,7 +154,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         options: {
           emailRedirectTo: redirectUrl,
           data: {
-            doctor_name: doctorName
+            doctor_name: name,
+            username: username
           }
         }
       });
@@ -152,12 +179,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('doctor_name')
+        .select('doctor_name, role')
         .eq('user_id', userId)
         .maybeSingle();
       
       if (profile) {
         setDoctorName(profile.doctor_name);
+        setUserRole(profile.role);
       }
     } catch (error) {
       console.error('Error fetching doctor profile:', error);
@@ -171,6 +199,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(null);
       setSession(null);
       setDoctorName('');
+      setUserRole(null);
       // Save the fact that user logged out to prevent auto-session restore
       localStorage.setItem('user_logged_out', 'true');
       window.location.href = '/';
@@ -189,7 +218,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       signIn,
       signUp,
       signOut,
-      doctorName
+      doctorName,
+      userRole
     }}>
       {children}
     </AuthContext.Provider>
