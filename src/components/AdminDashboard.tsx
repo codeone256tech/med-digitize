@@ -1,75 +1,89 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
-import { Users, FileText, Shield, UserPlus, Trash2, Edit2, Search } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Users, FileText, Activity, Settings, MoreVertical, Edit, Trash2, LogOut, UserPlus, Eye, Clock } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
+import { AddDoctorProfile } from './pages/AddDoctorProfile';
+import { ViewDoctorProfiles } from './pages/ViewDoctorProfiles';
+import { EditDoctorProfile } from './pages/EditDoctorProfile';
+import { AuditLogs } from './pages/AuditLogs';
 import medDigitizeLogo from '@/assets/meddigitize-logo.png';
 
-interface Profile {
+interface DashboardStats {
+  totalDoctors: number;
+  totalRecords: number;
+  totalPatients: number;
+  recentActivity: number;
+}
+
+interface Doctor {
   id: string;
   user_id: string;
   doctor_name: string;
-  username: string;
   email: string;
   role: string;
   created_at: string;
 }
 
-interface MedicalRecord {
-  id: string;
-  patient_name: string;
-  patient_id: string;
-  diagnosis: string;
-  doctor_id: string;
-  date_recorded: string;
-  created_at: string;
-  age: number;
-  gender: string;
-  image_url: string;
-  prescription: string;
-  raw_text: string;
-  updated_at: string;
-  profiles: any;
-}
-
 export const AdminDashboard = () => {
-  const { user, signOut, userRole } = useAuth();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const { user, signOut, doctorName, userRole } = useAuth();
   const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats>({
+    totalDoctors: 0,
+    totalRecords: 0,
+    totalPatients: 0,
+    recentActivity: 0
+  });
+  const [recentRecords, setRecentRecords] = useState<any[]>([]);
+  const [currentView, setCurrentView] = useState('dashboard');
+  const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
 
   useEffect(() => {
-    fetchProfiles();
-    fetchMedicalRecords();
-  }, []);
+    if (userRole === 'admin') {
+      fetchDashboardData();
+    }
+  }, [userRole]);
 
-  const fetchProfiles = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch doctors
+      const { data: doctors } = await supabase
         .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
 
-      if (error) throw error;
-      setProfiles(data || []);
+      // Fetch medical records
+      const { data: records } = await supabase
+        .from('medical_records')
+        .select('*, profiles!inner(doctor_name)')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      const uniquePatients = new Set(records?.map(r => r.patient_id)).size;
+
+      setStats({
+        totalDoctors: doctors?.length || 0,
+        totalRecords: records?.length || 0,
+        totalPatients: uniquePatients,
+        recentActivity: records?.filter(r => {
+          const recordDate = new Date(r.created_at);
+          const dayAgo = new Date();
+          dayAgo.setDate(dayAgo.getDate() - 1);
+          return recordDate > dayAgo;
+        }).length || 0
+      });
+
+      setRecentRecords(records || []);
     } catch (error) {
-      console.error('Error fetching profiles:', error);
+      console.error('Error fetching dashboard data:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch user profiles",
+        description: "Failed to fetch dashboard data",
         variant: "destructive"
       });
     } finally {
@@ -77,105 +91,11 @@ export const AdminDashboard = () => {
     }
   };
 
-  const fetchMedicalRecords = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('medical_records')
-        .select(`
-          *,
-          profiles!inner (
-            doctor_name
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
-      setMedicalRecords(data || []);
-    } catch (error) {
-      console.error('Error fetching medical records:', error);
-    }
-  };
-
-  const updateUserRole = async (userId: string, newRole: string) => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('user_id', userId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: `User role updated to ${newRole}`,
-      });
-
-      fetchProfiles();
-      setEditDialogOpen(false);
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update user role",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const deleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('user_id', userId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "User deleted successfully",
-      });
-
-      fetchProfiles();
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete user",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const filteredProfiles = profiles.filter(profile =>
-    profile.doctor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    profile.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    profile.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const stats = {
-    totalUsers: profiles.length,
-    totalAdmins: profiles.filter(p => p.role === 'admin').length,
-    totalRecords: medicalRecords.length,
-    recentRecords: medicalRecords.filter(r => {
-      const recordDate = new Date(r.date_recorded);
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      return recordDate > weekAgo;
-    }).length
-  };
-
   if (userRole !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <Shield className="h-12 w-12 text-destructive mx-auto mb-4" />
             <CardTitle>Access Denied</CardTitle>
           </CardHeader>
           <CardContent>
@@ -209,10 +129,11 @@ export const AdminDashboard = () => {
               <img src={medDigitizeLogo} alt="MedDigitize" className="h-8 w-8" />
               <div>
                 <h1 className="text-xl font-bold text-primary">Admin Dashboard</h1>
-                <p className="text-sm text-muted-foreground">MedDigitize System</p>
+                <p className="text-sm text-muted-foreground">Welcome, {doctorName}</p>
               </div>
             </div>
             <Button onClick={signOut} variant="outline">
+              <LogOut className="mr-2 h-4 w-4" />
               Sign Out
             </Button>
           </div>
@@ -220,206 +141,194 @@ export const AdminDashboard = () => {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalUsers}</div>
-            </CardContent>
-          </Card>
+        {currentView === 'add-doctor' && (
+          <AddDoctorProfile
+            onBack={() => setCurrentView('dashboard')}
+            onSuccess={() => {
+              setCurrentView('view-doctors');
+              fetchDashboardData();
+            }}
+          />
+        )}
+        
+        {currentView === 'view-doctors' && (
+          <ViewDoctorProfiles
+            onBack={() => setCurrentView('dashboard')}
+            onEdit={(doctor) => {
+              setSelectedDoctor(doctor);
+              setCurrentView('edit-doctor');
+            }}
+            onAdd={() => setCurrentView('add-doctor')}
+          />
+        )}
+        
+        {currentView === 'edit-doctor' && selectedDoctor && (
+          <EditDoctorProfile
+            doctor={selectedDoctor}
+            onBack={() => setCurrentView('view-doctors')}
+            onSuccess={() => {
+              setCurrentView('view-doctors');
+              setSelectedDoctor(null);
+            }}
+          />
+        )}
+        
+        {currentView === 'audit-logs' && (
+          <AuditLogs
+            onBack={() => setCurrentView('dashboard')}
+          />
+        )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Administrators</CardTitle>
-              <Shield className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalAdmins}</div>
-            </CardContent>
-          </Card>
+        {currentView === 'dashboard' && (
+          <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Doctors</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.totalDoctors}</div>
+                  <p className="text-xs text-muted-foreground">Active system users</p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Records</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalRecords}</div>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Medical Records</CardTitle>
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.totalRecords}</div>
+                  <p className="text-xs text-muted-foreground">Total digitized records</p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">This Week</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.recentRecords}</div>
-            </CardContent>
-          </Card>
-        </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Patients</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.totalPatients}</div>
+                  <p className="text-xs text-muted-foreground">Unique patients</p>
+                </CardContent>
+              </Card>
 
-        {/* Main Content */}
-        <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="users">User Management</TabsTrigger>
-            <TabsTrigger value="records">Medical Records</TabsTrigger>
-          </TabsList>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
+                  <Activity className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.recentActivity}</div>
+                  <p className="text-xs text-muted-foreground">Records today</p>
+                </CardContent>
+              </Card>
+            </div>
 
-          <TabsContent value="users">
-            <Card>
+            {/* Admin Functions */}
+            <Card className="mb-8">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  User Management
-                </CardTitle>
-                <div className="flex items-center gap-4">
-                  <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search users..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
+                <CardTitle>Admin Functions</CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Username</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProfiles.map((profile) => (
-                      <TableRow key={profile.id}>
-                        <TableCell className="font-medium">
-                          {profile.doctor_name}
-                        </TableCell>
-                        <TableCell>{profile.username}</TableCell>
-                        <TableCell>{profile.email}</TableCell>
-                        <TableCell>
-                          <Badge variant={profile.role === 'admin' ? 'destructive' : 'secondary'}>
-                            {profile.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {new Date(profile.created_at).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Dialog open={editDialogOpen && selectedProfile?.id === profile.id} 
-                                   onOpenChange={(open) => {
-                                     setEditDialogOpen(open);
-                                     if (open) setSelectedProfile(profile);
-                                   }}>
-                              <DialogTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Edit User Role</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label>User</Label>
-                                    <p className="text-sm text-muted-foreground">
-                                      {profile.doctor_name} ({profile.username})
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label>Role</Label>
-                                    <Select defaultValue={profile.role} 
-                                           onValueChange={(value) => updateUserRole(profile.user_id, value)}>
-                                      <SelectTrigger>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="user">User</SelectItem>
-                                        <SelectItem value="admin">Admin</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                            
-                            {profile.user_id !== user?.id && (
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => deleteUser(profile.user_id)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Button 
+                    variant="outline"
+                    className="h-24 flex-col"
+                    onClick={() => setCurrentView('add-doctor')}
+                  >
+                    <UserPlus className="h-6 w-6 mb-2" />
+                    <span>Add Doctor</span>
+                  </Button>
+                  
+                  <Button 
+                    variant="outline"
+                    className="h-24 flex-col"
+                    onClick={() => setCurrentView('view-doctors')}
+                  >
+                    <Eye className="h-6 w-6 mb-2" />
+                    <span>View All Doctors</span>
+                  </Button>
+                  
+                  <Button 
+                    variant="outline"
+                    className="h-24 flex-col"
+                    onClick={() => setCurrentView('audit-logs')}
+                  >
+                    <Clock className="h-6 w-6 mb-2" />
+                    <span>Audit Logs</span>
+                  </Button>
+                  
+                  <Button 
+                    variant="outline"
+                    className="h-24 flex-col"
+                    onClick={() => console.log('Settings')}
+                  >
+                    <Settings className="h-6 w-6 mb-2" />
+                    <span>Settings</span>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          <TabsContent value="records">
+            {/* Recent Medical Records */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
-                  Medical Records Overview
+                  Recent Medical Records
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Patient</TableHead>
-                      <TableHead>Patient ID</TableHead>
-                      <TableHead>Diagnosis</TableHead>
-                      <TableHead>Doctor</TableHead>
-                      <TableHead>Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {medicalRecords.slice(0, 50).map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-medium">
-                          {record.patient_name}
-                        </TableCell>
-                        <TableCell>{record.patient_id}</TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {record.diagnosis || 'No diagnosis'}
-                        </TableCell>
-                        <TableCell>
-                          {record.profiles?.doctor_name || 'Unknown'}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(record.date_recorded).toLocaleDateString()}
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Patient Name</TableHead>
+                        <TableHead>Patient ID</TableHead>
+                        <TableHead>Doctor</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Diagnosis</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {recentRecords.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground">
+                            No records found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        recentRecords.map((record) => (
+                          <TableRow key={record.id}>
+                            <TableCell className="font-medium">
+                              {record.patient_name}
+                            </TableCell>
+                            <TableCell className="font-mono">
+                              {record.patient_id}
+                            </TableCell>
+                            <TableCell>
+                              {record.profiles?.doctor_name || 'Unknown'}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(record.date_recorded).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="max-w-48 truncate">
+                              {record.diagnosis || 'No diagnosis'}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
+          </>
+        )}
       </div>
     </div>
   );

@@ -16,21 +16,20 @@ export const Auth = () => {
   const { toast } = useToast();
   
   const [loginForm, setLoginForm] = useState({
-    username: '',
+    email: '',
     password: ''
   });
   
   const [signupForm, setSignupForm] = useState({
     name: '',
-    username: '',
     email: '',
     password: ''
   });
 
   // Clear forms when component mounts to prevent autofill
   useEffect(() => {
-    setLoginForm({ username: '', password: '' });
-    setSignupForm({ name: '', username: '', email: '', password: '' });
+    setLoginForm({ email: '', password: '' });
+    setSignupForm({ name: '', email: '', password: '' });
   }, []);
 
   if (loading) {
@@ -48,7 +47,7 @@ export const Auth = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const { error } = await signIn(loginForm.username, loginForm.password);
+    const { error } = await signIn(loginForm.email, loginForm.password);
     
     if (error) {
       toast({
@@ -62,7 +61,7 @@ export const Auth = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const { error } = await signUp(signupForm.name, signupForm.username, signupForm.email, signupForm.password);
+    const { error } = await signUp(signupForm.name, signupForm.email, signupForm.password);
     
     if (error) {
       toast({
@@ -97,16 +96,16 @@ export const Auth = () => {
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-username">Username</Label>
+                  <Label htmlFor="login-email">Email</Label>
                   <div className="relative">
-                    <UserCheck className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                      id="login-username"
-                      type="text"
-                      placeholder="Enter your username"
+                      id="login-email"
+                      type="email"
+                      placeholder="Enter your email"
                       className="pl-10"
-                      value={loginForm.username}
-                      onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
+                      value={loginForm.email}
+                      onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
                       autoComplete="off"
                       required
                     />
@@ -150,23 +149,6 @@ export const Auth = () => {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="signup-username">Username</Label>
-                  <div className="relative">
-                    <UserCheck className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="signup-username"
-                      type="text"
-                      placeholder="Choose a username"
-                      className="pl-10"
-                      value={signupForm.username}
-                      onChange={(e) => setSignupForm({...signupForm, username: e.target.value})}
-                      autoComplete="off"
-                      required
-                    />
-                  </div>
-                </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
                   <div className="relative">

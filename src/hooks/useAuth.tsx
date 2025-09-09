@@ -7,8 +7,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (username: string, password: string) => Promise<{ error?: string }>;
-  signUp: (name: string, username: string, email: string, password: string) => Promise<{ error?: string }>;
+  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  signUp: (name: string, email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   doctorName: string | null;
   userRole: string | null;
@@ -90,7 +90,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
   };
 
-  const signIn = async (username: string, password: string) => {
+  const signIn = async (email: string, password: string) => {
     try {
       // Clean up existing state
       cleanupAuthState();
@@ -102,24 +102,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Continue even if this fails
       }
 
-      // First, find the user by username to get their email
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('username', username)
-        .maybeSingle();
-
-      if (profileError || !profile?.email) {
-        return { error: 'Invalid username or password' };
-      }
-
       const { error } = await supabase.auth.signInWithPassword({
-        email: profile.email,
+        email,
         password,
       });
 
       if (error) {
-        return { error: 'Invalid username or password' };
+        return { error: 'Invalid email or password' };
       }
 
       // Force page reload for clean state
@@ -133,17 +122,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signUp = async (name: string, username: string, email: string, password: string) => {
+  const signUp = async (name: string, email: string, password: string) => {
     try {
-      // Check if username already exists
+      // Check if email already exists
       const { data: existingProfile } = await supabase
         .from('profiles')
-        .select('username')
-        .eq('username', username)
+        .select('email')
+        .eq('email', email)
         .maybeSingle();
 
       if (existingProfile) {
-        return { error: 'Username already exists' };
+        return { error: 'Email already exists' };
       }
 
       const redirectUrl = `${window.location.origin}/`;
@@ -155,7 +144,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           emailRedirectTo: redirectUrl,
           data: {
             doctor_name: name,
-            username: username
+            username: email.split('@')[0]
           }
         }
       });
