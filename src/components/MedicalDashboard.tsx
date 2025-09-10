@@ -19,7 +19,7 @@ import {
   Filter
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService } from '@/services/apiService';
 import { useToast } from '@/components/ui/use-toast';
 
 interface MedicalRecord {

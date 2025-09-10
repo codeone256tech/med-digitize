@@ -1,28 +1,10 @@
-import { supabase } from "@/integrations/supabase/client";
-import { ExtractedFields } from "@/utils/ocrService";
+import { ExtractedFields } from "@/services/localOCRService";
 
 export class AIService {
   static async enhanceExtraction(extractedText: string): Promise<ExtractedFields> {
-    try {
-      console.log('Calling AI enhancement service...');
-      
-      const { data, error } = await supabase.functions.invoke('enhance-extraction', {
-        body: { extractedText }
-      });
-
-      if (error) {
-        console.error('AI enhancement error:', error);
-        throw error;
-      }
-
-      console.log('AI enhancement result:', data);
-      return data.extractedFields;
-    } catch (error) {
-      console.error('Failed to enhance extraction with AI:', error);
-      
-      // Fallback to basic extraction
-      return this.fallbackExtraction(extractedText);
-    }
+    // For offline setup, we'll use the fallback extraction method
+    // You can later integrate with a local AI model if needed
+    return this.fallbackExtraction(extractedText);
   }
 
   private static fallbackExtraction(text: string): ExtractedFields {

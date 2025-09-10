@@ -7,9 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService } from '@/services/apiService';
 import { useAuth } from '@/hooks/useAuth';
-import { OCRService, ExtractedFields } from '@/utils/ocrService';
+import { localOCRService, ExtractedFields } from '@/services/localOCRService';
 
 interface RecordFormProps {
   extractedText: string;
@@ -32,7 +32,7 @@ export const RecordForm = ({ extractedText, imageUrl, onSaved, onBack }: RecordF
     } catch (e) {
       // Fall back to basic extraction
     }
-    return OCRService.extractFields(extractedText);
+    return localOCRService.extractFields(extractedText);
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -52,44 +52,31 @@ export const RecordForm = ({ extractedText, imageUrl, onSaved, onBack }: RecordF
     
     try {
       // Generate patient ID
-      const patientId = OCRService.generatePatientId(fields.patientName);
+      const patientId = localOCRService.generatePatientId(fields.patientName);
       
-      // Upload image to storage
+      // Upload image if available
       let imageStorageUrl = '';
       if (imageUrl && imageUrl.startsWith('blob:')) {
         const response = await fetch(imageUrl);
         const blob = await response.blob();
-        const fileName = `${patientId}_${Date.now()}.jpg`;
+        const file = new File([blob], `${patientId}_${Date.now()}.jpg`, { type: 'image/jpeg' });
         
-        const { error: uploadError } = await supabase.storage
-          .from('medical-images')
-          .upload(fileName, blob);
-          
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage
-            .from('medical-images')
-            .getPublicUrl(fileName);
-          imageStorageUrl = urlData.publicUrl;
-        }
+        const uploadResult = await apiService.uploadFile(file);
+        imageStorageUrl = uploadResult.url;
       }
 
       // Save to database
-      const { error } = await supabase
-        .from('medical_records')
-        .insert({
-          patient_id: patientId,
-          patient_name: fields.patientName,
-          age: fields.age ? parseInt(fields.age) : null,
-          gender: fields.gender || null,
-          date_recorded: fields.date ? new Date(fields.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          diagnosis: fields.diagnosis || null,
-          prescription: fields.prescription || null,
-          raw_text: extractedText,
-          image_url: imageStorageUrl || null,
-          doctor_id: user.id
-        });
-
-      if (error) throw error;
+      const newRecord = await apiService.createMedicalRecord({
+        patientId,
+        patientName: fields.patientName,
+        age: fields.age || '',
+        gender: fields.gender || '',
+        date: fields.date ? new Date(fields.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        diagnosis: fields.diagnosis || '',
+        prescription: fields.prescription || '',
+        imageUrl: imageStorageUrl || '',
+        doctorId: user.id
+      });
 
       toast({
         title: "Success",

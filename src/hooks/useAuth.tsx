@@ -1,11 +1,9 @@
 import { useState, useEffect, createContext, useContext } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService, User } from '@/services/apiService';
 import { useToast } from '@/components/ui/use-toast';
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (name: string, email: string, password: string) => Promise<{ error?: string }>;
@@ -18,103 +16,35 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [doctorName, setDoctorName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Fetch doctor profile
-          setTimeout(async () => {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('doctor_name, role')
-              .eq('user_id', session.user.id)
-              .maybeSingle();
-            
-            if (profile) {
-              setDoctorName(profile.doctor_name);
-              setUserRole(profile.role);
-            }
-          }, 0);
-        } else {
-          setDoctorName(null);
-          setUserRole(null);
-        }
-        setLoading(false);
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      // Check if user explicitly logged out
-      const userLoggedOut = localStorage.getItem('user_logged_out');
-      
-      if (session?.user && !userLoggedOut) {
-        setSession(session);
-        setUser(session.user);
-        fetchDoctorProfile(session.user.id);
-      } else {
-        // Clear session if user logged out
-        if (userLoggedOut) {
-          localStorage.removeItem('user_logged_out');
-          supabase.auth.signOut({ scope: 'global' });
-        }
-        setSession(null);
-        setUser(null);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    // Check for existing user session
+    const currentUser = apiService.getCurrentUser();
+    if (currentUser) {
+      setUser(currentUser);
+      setDoctorName(currentUser.name);
+      setUserRole(currentUser.role);
+    }
+    setLoading(false);
   }, []);
-
-  const cleanupAuthState = () => {
-    // Remove all Supabase auth keys from localStorage
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('supabase.auth.') || key.includes('sb-')) {
-        localStorage.removeItem(key);
-      }
-    });
-    // Remove from sessionStorage if in use
-    Object.keys(sessionStorage || {}).forEach((key) => {
-      if (key.startsWith('supabase.auth.') || key.includes('sb-')) {
-        sessionStorage.removeItem(key);
-      }
-    });
-  };
 
   const signIn = async (email: string, password: string) => {
     try {
-      // Clean up existing state
-      cleanupAuthState();
+      const response = await apiService.signIn(email, password);
       
-      // Attempt global sign out first
-      try {
-        await supabase.auth.signOut({ scope: 'global' });
-      } catch (err) {
-        // Continue even if this fails
+      if (response.error) {
+        return { error: response.error };
       }
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        return { error: 'Invalid email or password' };
+      if (response.user) {
+        setUser(response.user);
+        setDoctorName(response.user.name);
+        setUserRole(response.user.role);
       }
-
-      // Force page reload for clean state
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 100);
 
       return {};
     } catch (error) {
@@ -124,38 +54,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (name: string, email: string, password: string) => {
     try {
-      // Check if email already exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (existingProfile) {
-        return { error: 'Email already exists' };
-      }
-
-      const redirectUrl = `${window.location.origin}/`;
+      const response = await apiService.signUp(name, email, password);
       
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            doctor_name: name,
-            username: email.split('@')[0]
-          }
-        }
-      });
-
-      if (error) {
-        return { error: error.message };
+      if (response.error) {
+        return { error: response.error };
       }
 
       toast({
         title: "Success",
-        description: "Account created successfully! Please check your email for verification.",
+        description: "Account created successfully! You can now log in.",
       });
 
       return {};
@@ -164,37 +71,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const fetchDoctorProfile = async (userId: string) => {
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('doctor_name, role')
-        .eq('user_id', userId)
-        .maybeSingle();
-      
-      if (profile) {
-        setDoctorName(profile.doctor_name);
-        setUserRole(profile.role);
-      }
-    } catch (error) {
-      console.error('Error fetching doctor profile:', error);
-    }
-  };
-
   const signOut = async () => {
     try {
-      cleanupAuthState();
-      await supabase.auth.signOut({ scope: 'global' });
+      await apiService.signOut();
       setUser(null);
-      setSession(null);
-      setDoctorName('');
+      setDoctorName(null);
       setUserRole(null);
-      // Save the fact that user logged out to prevent auto-session restore
-      localStorage.setItem('user_logged_out', 'true');
       window.location.href = '/';
     } catch (error) {
       console.error('Error signing out:', error);
-      // Force navigation even if signOut fails
       window.location.href = '/';
     }
   };
@@ -202,7 +87,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <AuthContext.Provider value={{
       user,
-      session,
       loading,
       signIn,
       signUp,

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, X } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService } from '@/services/apiService';
 
 interface MedicalRecord {
   id: string;
@@ -65,24 +65,27 @@ export const EditableRecordDialog = ({ record, onClose, onUpdate }: EditableReco
     setIsSaving(true);
     
     try {
-      const { data, error } = await supabase
-        .from('medical_records')
-        .update({
-          patient_name: formData.patient_name,
-          age: formData.age ? parseInt(formData.age) : null,
-          gender: formData.gender || null,
-          date_recorded: formData.date_recorded || new Date().toISOString().split('T')[0],
-          diagnosis: formData.diagnosis || null,
-          prescription: formData.prescription || null,
-        })
-        .eq('id', record.id)
-        .select()
-        .single();
+      const updatedRecord = await apiService.updateMedicalRecord(record.id, {
+        patientName: formData.patient_name,
+        age: formData.age || '',
+        gender: formData.gender || '',
+        date: formData.date_recorded || new Date().toISOString().split('T')[0],
+        diagnosis: formData.diagnosis || '',
+        prescription: formData.prescription || '',
+      });
 
-      if (error) throw error;
-
-      const updatedRecord = { ...record, ...data };
-      onUpdate(updatedRecord);
+      // Convert back to dashboard format
+      const formattedRecord = {
+        ...record,
+        patient_name: updatedRecord.patientName,
+        age: updatedRecord.age ? parseInt(updatedRecord.age) : null,
+        gender: updatedRecord.gender,
+        date_recorded: updatedRecord.date,
+        diagnosis: updatedRecord.diagnosis,
+        prescription: updatedRecord.prescription,
+      };
+      
+      onUpdate(formattedRecord);
       
       toast({
         title: "Success",

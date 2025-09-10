@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Users, FileText, Activity, Settings, MoreVertical, Edit, Trash2, LogOut, UserPlus, Eye, Clock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService } from '@/services/apiService';
 import { useToast } from '@/components/ui/use-toast';
 import { AddDoctorProfile } from './pages/AddDoctorProfile';
 import { ViewDoctorProfiles } from './pages/ViewDoctorProfiles';
@@ -53,25 +53,19 @@ export const AdminDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       // Fetch doctors
-      const { data: doctors } = await supabase
-        .from('profiles')
-        .select('*');
+      const doctors = await apiService.getDoctorProfiles();
 
       // Fetch medical records
-      const { data: records } = await supabase
-        .from('medical_records')
-        .select('*, profiles!inner(doctor_name)')
-        .order('created_at', { ascending: false })
-        .limit(10);
+      const records = await apiService.getMedicalRecords();
 
-      const uniquePatients = new Set(records?.map(r => r.patient_id)).size;
+      const uniquePatients = new Set(records?.map(r => r.patientId)).size;
 
       setStats({
         totalDoctors: doctors?.length || 0,
         totalRecords: records?.length || 0,
         totalPatients: uniquePatients,
         recentActivity: records?.filter(r => {
-          const recordDate = new Date(r.created_at);
+          const recordDate = new Date(r.createdAt);
           const dayAgo = new Date();
           dayAgo.setDate(dayAgo.getDate() - 1);
           return recordDate > dayAgo;
@@ -305,16 +299,16 @@ export const AdminDashboard = () => {
                         recentRecords.map((record) => (
                           <TableRow key={record.id}>
                             <TableCell className="font-medium">
-                              {record.patient_name}
+                              {record.patientName}
                             </TableCell>
                             <TableCell className="font-mono">
-                              {record.patient_id}
+                              {record.patientId}
                             </TableCell>
                             <TableCell>
-                              {record.profiles?.doctor_name || 'Unknown'}
+                              {record.doctorId || 'Unknown'}
                             </TableCell>
                             <TableCell>
-                              {new Date(record.date_recorded).toLocaleDateString()}
+                              {new Date(record.date).toLocaleDateString()}
                             </TableCell>
                             <TableCell className="max-w-48 truncate">
                               {record.diagnosis || 'No diagnosis'}

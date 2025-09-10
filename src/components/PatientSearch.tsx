@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService } from '@/services/apiService';
 import { useAuth } from '@/hooks/useAuth';
 import { Search, Filter, CalendarIcon, Download, Eye } from 'lucide-react';
 import { format } from 'date-fns';

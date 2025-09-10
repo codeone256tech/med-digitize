@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Save, Loader2, User, Mail } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService } from '@/services/apiService';
 
 interface AddDoctorProfileProps {
   onBack: () => void;
@@ -28,27 +28,18 @@ export const AddDoctorProfile = ({ onBack, onSuccess }: AddDoctorProfileProps) =
     setIsLoading(true);
 
     try {
-      // Create auth user
-      const { data, error } = await supabase.auth.signUp({
+      // Create doctor profile through API
+      await apiService.createDoctorProfile({
+        name: formData.name,
         email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            doctor_name: formData.name,
-            username: formData.email.split('@')[0],
-            role: formData.role
-          }
-        }
+        role: formData.role
       });
 
-      if (error) throw error;
-
       // Log audit event
-      await supabase.rpc('log_audit_event', {
-        p_action: 'CREATE',
-        p_resource_type: 'doctor_profile',
-        p_resource_id: data.user?.id,
-        p_details: { name: formData.name, email: formData.email }
+      await apiService.logAuditEvent({
+        action: 'CREATE',
+        resource: 'doctor_profile',
+        details: `Created doctor profile for ${formData.name} (${formData.email})`
       });
 
       toast({

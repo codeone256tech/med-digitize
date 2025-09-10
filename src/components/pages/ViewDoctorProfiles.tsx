@@ -1,3 +1,4 @@
+// Simplified placeholder - offline version
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -5,17 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ArrowLeft, Search, MoreVertical, Edit, Trash2, Users, Plus } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, MoreVertical, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService } from '@/services/apiService';
 
 interface Doctor {
   id: string;
-  user_id: string;
-  doctor_name: string;
+  name: string;
   email: string;
   role: string;
-  created_at: string;
+  createdAt: string;
 }
 
 interface ViewDoctorProfilesProps {
@@ -36,13 +36,8 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
 
   const fetchDoctors = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setDoctors(data || []);
+      const data = await apiService.getDoctorProfiles();
+      setDoctors(data);
     } catch (error) {
       console.error('Error fetching doctors:', error);
       toast({
@@ -56,31 +51,24 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
   };
 
   const handleDelete = async (doctor: Doctor) => {
-    if (!confirm(`Are you sure you want to delete ${doctor.doctor_name}'s profile?`)) return;
+    if (!confirm(`Are you sure you want to delete ${doctor.name}?`)) {
+      return;
+    }
 
     try {
-      // Delete from profiles (the user will be handled by Supabase)
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('user_id', doctor.user_id);
-
-      if (error) throw error;
-
-      // Log audit event
-      await supabase.rpc('log_audit_event', {
-        p_action: 'DELETE',
-        p_resource_type: 'doctor_profile',
-        p_resource_id: doctor.user_id,
-        p_details: { name: doctor.doctor_name, email: doctor.email }
+      await apiService.deleteDoctorProfile(doctor.id);
+      await apiService.logAuditEvent({
+        action: 'DELETE',
+        resource: 'doctor_profile',
+        details: `Deleted doctor profile: ${doctor.name} (${doctor.email})`
       });
 
       await fetchDoctors();
       toast({
         title: "Success",
-        description: "Doctor profile deleted successfully",
+        description: "Doctor profile deleted successfully"
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting doctor:', error);
       toast({
         title: "Error",
@@ -91,17 +79,9 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
   };
 
   const filteredDoctors = doctors.filter(doctor =>
-    doctor.doctor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     doctor.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -119,31 +99,26 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
         </Button>
       </div>
 
-      {/* Search */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name or email..."
-              className="pl-10"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Doctors Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            All Doctors ({filteredDoctors.length})
-          </CardTitle>
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search doctors..."
+                className="pl-10"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -164,17 +139,15 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
                 ) : (
                   filteredDoctors.map((doctor) => (
                     <TableRow key={doctor.id}>
-                      <TableCell className="font-medium">
-                        {doctor.doctor_name}
-                      </TableCell>
+                      <TableCell className="font-medium">{doctor.name}</TableCell>
                       <TableCell>{doctor.email}</TableCell>
                       <TableCell>
                         <Badge variant={doctor.role === 'admin' ? 'default' : 'secondary'}>
-                          {doctor.role === 'admin' ? 'Administrator' : 'Doctor'}
+                          {doctor.role}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {new Date(doctor.created_at).toLocaleDateString()}
+                        {new Date(doctor.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -186,7 +159,7 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
                           <DropdownMenuContent>
                             <DropdownMenuItem onClick={() => onEdit(doctor)}>
                               <Edit className="mr-2 h-4 w-4" />
-                              Edit Profile
+                              Edit
                             </DropdownMenuItem>
                             {doctor.role !== 'admin' && (
                               <DropdownMenuItem 
@@ -205,7 +178,7 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
                 )}
               </TableBody>
             </Table>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

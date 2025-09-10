@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Search, Plus, Eye, Trash2, MoreVertical, Edit, ArrowUpDown, ArrowUp, ArrowDown, User, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService, MedicalRecord } from '@/services/apiService';
 import { useToast } from '@/components/ui/use-toast';
 import { DashboardSidebar } from './DashboardSidebar';
 import { EditableRecordDialog } from './EditableRecordDialog';
@@ -16,7 +16,7 @@ import { MedicalAnalytics } from './MedicalAnalytics';
 import { MedicalDashboard } from './MedicalDashboard';
 import { PatientSearch } from './PatientSearch';
 
-interface MedicalRecord {
+interface DashboardMedicalRecord {
   id: string;
   patient_id: string;
   patient_name: string;
@@ -25,8 +25,8 @@ interface MedicalRecord {
   date_recorded: string;
   diagnosis: string | null;
   prescription: string | null;
-  raw_text: string | null;
-  image_url: string | null;
+  raw_text?: string | null;
+  image_url?: string | null;
   created_at: string;
 }
 
@@ -40,11 +40,11 @@ type SortDirection = 'asc' | 'desc';
 export const Dashboard = ({ onNewScan }: DashboardProps) => {
   const { user, signOut, doctorName } = useAuth();
   const { toast } = useToast();
-  const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [records, setRecords] = useState<DashboardMedicalRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
-  const [editingRecord, setEditingRecord] = useState<MedicalRecord | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<DashboardMedicalRecord | null>(null);
+  const [editingRecord, setEditingRecord] = useState<DashboardMedicalRecord | null>(null);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [currentView, setCurrentView] = useState('records');
   const [sortField, setSortField] = useState<SortField>('date_recorded');
@@ -58,14 +58,19 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
     if (!user) return;
     
     try {
-      const { data, error } = await supabase
-        .from('medical_records')
-        .select('*')
-        .eq('doctor_id', user.id) // Only fetch records for current doctor
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setRecords(data || []);
+      const data = await apiService.getMedicalRecords();
+      // Convert to expected format
+      const formattedRecords = data.map(record => ({
+        ...record,
+        patient_id: record.patientId,
+        patient_name: record.patientName,
+        age: record.age ? parseInt(record.age) : null,
+        date_recorded: record.date,
+        image_url: record.imageUrl,
+        raw_text: null,
+        created_at: record.createdAt
+      }));
+      setRecords(formattedRecords);
     } catch (error) {
       console.error('Error fetching records:', error);
       toast({
@@ -82,14 +87,7 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
     if (!user) return;
     
     try {
-      const { error } = await supabase
-        .from('medical_records')
-        .delete()
-        .eq('id', recordId)
-        .eq('doctor_id', user.id); // Ensure user can only delete their own records
-
-      if (error) throw error;
-
+      await apiService.deleteMedicalRecord(recordId);
       // Force refresh from database to ensure consistency
       await fetchRecords();
       
@@ -109,23 +107,8 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
 
   const handleDeleteAccount = async () => {
     try {
-      // Delete user's records first
-      const { error: recordsError } = await supabase
-        .from('medical_records')
-        .delete()
-        .eq('doctor_id', user?.id);
-
-      if (recordsError) throw recordsError;
-
-      // Delete profile
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('user_id', user?.id);
-
-      if (profileError) throw profileError;
-
-      // Sign out (the auth trigger will handle cleanup)
+      // For offline setup, we just sign out
+      // Backend will handle actual account deletion
       await signOut();
 
       toast({
@@ -151,7 +134,7 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
     }
   };
 
-  const handleRecordUpdate = (updatedRecord: MedicalRecord) => {
+  const handleRecordUpdate = (updatedRecord: DashboardMedicalRecord) => {
     setRecords(records.map(r => r.id === updatedRecord.id ? updatedRecord : r));
     setEditingRecord(null);
   };
@@ -437,9 +420,9 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
 
         {/* Edit Record Dialog */}
         <EditableRecordDialog 
-          record={editingRecord}
+          record={editingRecord as any}
           onClose={() => setEditingRecord(null)}
-          onUpdate={handleRecordUpdate}
+          onUpdate={(updated: any) => handleRecordUpdate(updated)}
         />
 
         {/* Delete Account Dialog */}

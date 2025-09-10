@@ -7,10 +7,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Camera, Upload, Loader2, ArrowLeft, Save, Edit } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { OCRService, ExtractedFields } from '@/utils/ocrService';
+import { localOCRService, ExtractedFields } from '@/services/localOCRService';
 import { AIService } from '@/services/aiService';
 import { CameraCapture } from './CameraCapture';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService } from '@/services/apiService';
 import { useAuth } from '@/hooks/useAuth';
 
 interface ScannerProps {
@@ -49,7 +49,7 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
         const response = await fetch(imageSource);
         const blob = await response.blob();
         const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
-        extractedText = await OCRService.extractText(file);
+        extractedText = await localOCRService.extractText(file);
       } else {
         // File upload
         if (!imageSource.type.startsWith('image/')) {
@@ -58,7 +58,7 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
         
         imageUrl = URL.createObjectURL(imageSource);
         setPreview(imageUrl);
-        extractedText = await OCRService.extractText(imageSource);
+        extractedText = await localOCRService.extractText(imageSource);
       }
       
       if (!extractedText.trim()) {
@@ -115,25 +115,19 @@ export const Scanner = ({ onExtracted, onBack }: ScannerProps) => {
     
     try {
       // Generate patient ID
-      const patientId = OCRService.generatePatientId(manualFields.patientName);
+      const patientId = localOCRService.generatePatientId(manualFields.patientName);
 
       // Save to database
-      const { error } = await supabase
-        .from('medical_records')
-        .insert({
-          patient_id: patientId,
-          patient_name: manualFields.patientName,
-          age: manualFields.age ? parseInt(manualFields.age) : null,
-          gender: manualFields.gender || null,
-          date_recorded: manualFields.date || new Date().toISOString().split('T')[0],
-          diagnosis: manualFields.diagnosis || null,
-          prescription: manualFields.prescription || null,
-          raw_text: 'Manual entry',
-          image_url: null,
-          doctor_id: user.id
-        });
-
-      if (error) throw error;
+      const newRecord = await apiService.createMedicalRecord({
+        patientId,
+        patientName: manualFields.patientName,
+        age: manualFields.age || '',
+        gender: manualFields.gender || '',
+        date: manualFields.date || new Date().toISOString().split('T')[0],
+        diagnosis: manualFields.diagnosis || '',
+        prescription: manualFields.prescription || '',
+        doctorId: user.id
+      });
 
       toast({
         title: "Success",
