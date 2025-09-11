@@ -18,7 +18,7 @@ export const AddDoctorProfile = ({ onBack, onSuccess }: AddDoctorProfileProps) =
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
+    username: '',
     password: '',
     role: 'user'
   });
@@ -31,7 +31,7 @@ export const AddDoctorProfile = ({ onBack, onSuccess }: AddDoctorProfileProps) =
       // Create doctor profile through API
       await apiService.createDoctorProfile({
         name: formData.name,
-        email: formData.email,
+        username: formData.username,
         role: formData.role
       });
 
@@ -39,7 +39,7 @@ export const AddDoctorProfile = ({ onBack, onSuccess }: AddDoctorProfileProps) =
       await apiService.logAuditEvent({
         action: 'CREATE',
         resource: 'doctor_profile',
-        details: `Created doctor profile for ${formData.name} (${formData.email})`
+        details: `Created doctor profile for ${formData.name} (${formData.username})`
       });
 
       toast({
@@ -92,16 +92,16 @@ export const AddDoctorProfile = ({ onBack, onSuccess }: AddDoctorProfileProps) =
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Username</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="doctor@hospital.com"
+                  id="username"
+                  type="text"
+                  placeholder="doctorsmith"
                   className="pl-10"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  value={formData.username}
+                  onChange={(e) => setFormData({...formData, username: e.target.value})}
                   required
                 />
               </div>

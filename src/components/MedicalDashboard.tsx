@@ -9,34 +9,31 @@ import {
   AlertTriangle, 
   Activity, 
   Search, 
-  Bell, 
   TrendingUp,
   Heart,
   Stethoscope,
   FileText,
-  Plus,
   Calendar,
   Filter
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { apiService } from '@/services/apiService';
-import { useToast } from '@/components/ui/use-toast';
 
 interface MedicalRecord {
   id: string;
-  patient_id: string;
-  patient_name: string;
-  age: number | null;
-  gender: string | null;
-  date_recorded: string;
-  diagnosis: string | null;
-  prescription: string | null;
-  created_at: string;
+  patientId: string;
+  patientName: string;
+  age: string;
+  gender: string;
+  date: string;
+  diagnosis: string;
+  prescription: string;
+  doctorId: string;
+  createdAt: string;
 }
 
 export const MedicalDashboard = () => {
   const { user, doctorName } = useAuth();
-  const { toast } = useToast();
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -49,13 +46,7 @@ export const MedicalDashboard = () => {
     if (!user) return;
     
     try {
-      const { data, error } = await supabase
-        .from('medical_records')
-        .select('*')
-        .eq('doctor_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await apiService.getMedicalRecords();
       setRecords(data || []);
     } catch (error) {
       console.error('Error fetching records:', error);
@@ -69,9 +60,9 @@ export const MedicalDashboard = () => {
   const thisWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const thisMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   
-  const todayRecords = records.filter(r => r.date_recorded === today);
-  const weekRecords = records.filter(r => r.date_recorded >= thisWeek);
-  const monthRecords = records.filter(r => r.date_recorded >= thisMonth);
+  const todayRecords = records.filter(r => r.date === today);
+  const weekRecords = records.filter(r => r.date >= thisWeek);
+  const monthRecords = records.filter(r => r.date >= thisMonth);
   const recentPatients = records.slice(0, 8);
   
   const highRiskPatients = records
@@ -81,15 +72,9 @@ export const MedicalDashboard = () => {
                  r.diagnosis?.toLowerCase().includes('heart'))
     .slice(0, 5);
 
-  const criticalRecords = records.filter(r => 
-    r.diagnosis?.toLowerCase().includes('critical') ||
-    r.diagnosis?.toLowerCase().includes('urgent') ||
-    r.diagnosis?.toLowerCase().includes('emergency')
-  );
-
   const filteredRecords = records.filter(r => 
-    r.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.patient_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.patientId.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (r.diagnosis && r.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
@@ -187,16 +172,16 @@ export const MedicalDashboard = () => {
                 recentPatients.map((patient) => (
                   <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
                     <div>
-                      <p className="font-medium">{patient.patient_name}</p>
+                      <p className="font-medium">{patient.patientName}</p>
                       <p className="text-sm text-muted-foreground">
-                        ID: {patient.patient_id}
+                        ID: {patient.patientId}
                         {patient.age && ` • ${patient.age}y`}
                         {patient.gender && ` • ${patient.gender}`}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">
-                        {new Date(patient.date_recorded).toLocaleDateString()}
+                        {new Date(patient.date).toLocaleDateString()}
                       </p>
                       {patient.diagnosis && (
                         <Badge variant="outline" className="text-xs mt-1">
@@ -237,8 +222,8 @@ export const MedicalDashboard = () => {
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {filteredRecords.slice(0, 5).map((patient) => (
                     <div key={patient.id} className="p-2 border rounded cursor-pointer hover:bg-muted text-sm">
-                      <p className="font-medium">{patient.patient_name}</p>
-                      <p className="text-xs text-muted-foreground">{patient.patient_id}</p>
+                      <p className="font-medium">{patient.patientName}</p>
+                      <p className="text-xs text-muted-foreground">{patient.patientId}</p>
                     </div>
                   ))}
                   {filteredRecords.length === 0 && (
@@ -284,11 +269,11 @@ export const MedicalDashboard = () => {
                   <div key={patient.id} className="p-3 border rounded-lg">
                     <div className="flex items-center gap-2 mb-1">
                       <AlertTriangle className="h-4 w-4 text-red-500" />
-                      <span className="font-medium">{patient.patient_name}</span>
+                      <span className="font-medium">{patient.patientName}</span>
                     </div>
                     <p className="text-sm text-muted-foreground">{patient.diagnosis}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Recorded: {new Date(patient.date_recorded).toLocaleDateString()}
+                      Recorded: {new Date(patient.date).toLocaleDateString()}
                     </p>
                     <Badge variant="destructive" className="mt-2">High Risk</Badge>
                   </div>
@@ -328,7 +313,7 @@ export const MedicalDashboard = () => {
                     <span className="font-medium">Unique Patients</span>
                   </div>
                   <p className="text-2xl font-bold">
-                    {new Set(records.map(r => r.patient_id)).size}
+                    {new Set(records.map(r => r.patientId)).size}
                   </p>
                   <p className="text-sm text-muted-foreground">Individual patients</p>
                 </div>
@@ -341,32 +326,24 @@ export const MedicalDashboard = () => {
                     <span className="font-medium">Most Common Conditions</span>
                   </div>
                   <div className="space-y-1">
-                    {records
-                      .filter(r => r.diagnosis)
-                      .reduce((acc, record) => {
-                        const diagnosis = record.diagnosis!.toLowerCase();
-                        if (diagnosis.includes('diabetes')) acc.diabetes = (acc.diabetes || 0) + 1;
-                        if (diagnosis.includes('hypertension')) acc.hypertension = (acc.hypertension || 0) + 1;
-                        if (diagnosis.includes('fever')) acc.fever = (acc.fever || 0) + 1;
-                        return acc;
-                      }, {} as Record<string, number>)
-                      && Object.entries(records
-                        .filter(r => r.diagnosis)
-                        .reduce((acc, record) => {
-                          const diagnosis = record.diagnosis!.toLowerCase();
-                          if (diagnosis.includes('diabetes')) acc.diabetes = (acc.diabetes || 0) + 1;
-                          if (diagnosis.includes('hypertension')) acc.hypertension = (acc.hypertension || 0) + 1;
-                          if (diagnosis.includes('fever')) acc.fever = (acc.fever || 0) + 1;
-                          return acc;
-                        }, {} as Record<string, number>))
-                        .slice(0, 3)
-                        .map(([condition, count]) => (
-                          <div key={condition} className="flex justify-between text-sm">
-                            <span className="capitalize">{condition}</span>
-                            <span className="font-medium">{count}</span>
-                          </div>
-                        ))
-                    }
+                    <div className="flex justify-between text-sm">
+                      <span>Diabetes</span>
+                      <span className="font-medium">
+                        {records.filter(r => r.diagnosis?.toLowerCase().includes('diabetes')).length}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Hypertension</span>
+                      <span className="font-medium">
+                        {records.filter(r => r.diagnosis?.toLowerCase().includes('hypertension')).length}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Fever</span>
+                      <span className="font-medium">
+                        {records.filter(r => r.diagnosis?.toLowerCase().includes('fever')).length}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </TabsContent>
@@ -379,7 +356,7 @@ export const MedicalDashboard = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5" />
+            <FileText className="h-5 w-5" />
             Quick Actions
           </CardTitle>
         </CardHeader>
@@ -411,13 +388,13 @@ export const MedicalDashboard = () => {
               className="h-20 flex flex-col items-center justify-center"
               onClick={() => {
                 const csvContent = [
-                  ['Patient Name', 'Patient ID', 'Age', 'Gender', 'Date Recorded', 'Diagnosis', 'Prescription'],
+                  ['Patient Name', 'Patient ID', 'Age', 'Gender', 'Date', 'Diagnosis', 'Prescription'],
                   ...records.map(record => [
-                    record.patient_name,
-                    record.patient_id,
-                    record.age?.toString() || '',
+                    record.patientName,
+                    record.patientId,
+                    record.age || '',
                     record.gender || '',
-                    record.date_recorded,
+                    record.date,
                     record.diagnosis || '',
                     record.prescription || ''
                   ])
@@ -432,16 +409,11 @@ export const MedicalDashboard = () => {
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                
-                toast({
-                  title: "Export Complete",
-                  description: `Downloaded ${records.length} records as CSV`
-                });
               }}
             >
-              <TrendingUp className="h-6 w-6 mb-2" />
-              <span>Export Report</span>
-              <span className="text-xs text-muted-foreground">Download CSV</span>
+              <Activity className="h-6 w-6 mb-2" />
+              <span>Export CSV</span>
+              <span className="text-xs text-muted-foreground">Download data</span>
             </Button>
           </div>
         </CardContent>

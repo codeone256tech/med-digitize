@@ -12,7 +12,7 @@ interface Doctor {
   id: string;
   user_id: string;
   doctor_name: string;
-  email: string;
+  username?: string;
   role: string;
   created_at: string;
 }
@@ -28,7 +28,7 @@ export const EditDoctorProfile = ({ doctor, onBack, onSuccess }: EditDoctorProfi
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: doctor.doctor_name,
-    email: doctor.email,
+    username: doctor.username || '',
     role: doctor.role
   });
 
@@ -38,26 +38,17 @@ export const EditDoctorProfile = ({ doctor, onBack, onSuccess }: EditDoctorProfi
 
     try {
       // Update profile
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          doctor_name: formData.name,
-          email: formData.email,
-          role: formData.role
-        })
-        .eq('user_id', doctor.user_id);
-
-      if (error) throw error;
+      await apiService.updateDoctorProfile(doctor.id, {
+        name: formData.name,
+        username: formData.username,
+        role: formData.role
+      });
 
       // Log audit event
-      await supabase.rpc('log_audit_event', {
-        p_action: 'UPDATE',
-        p_resource_type: 'doctor_profile',
-        p_resource_id: doctor.user_id,
-        p_details: { 
-          old: { name: doctor.doctor_name, email: doctor.email, role: doctor.role },
-          new: formData
-        }
+      await apiService.logAuditEvent({
+        action: 'UPDATE',
+        resource: 'doctor_profile',
+        details: `Updated profile for ${formData.name}`
       });
 
       toast({
@@ -110,16 +101,16 @@ export const EditDoctorProfile = ({ doctor, onBack, onSuccess }: EditDoctorProfi
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Username</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="doctor@hospital.com"
+                  id="username"
+                  type="text"
+                  placeholder="doctorsmith"
                   className="pl-10"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  value={formData.username}
+                  onChange={(e) => setFormData({...formData, username: e.target.value})}
                   required
                 />
               </div>

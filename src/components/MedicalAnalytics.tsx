@@ -40,24 +40,19 @@ export const MedicalAnalytics = () => {
     
     try {
       // Fetch all records for the doctor
-      const { data: records, error } = await supabase
-        .from('medical_records')
-        .select('*')
-        .eq('doctor_id', user.id);
-
-      if (error) throw error;
+      const records = await apiService.getMedicalRecords();
 
       // Process analytics data
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       
       const recordsThisMonth = records?.filter(record => {
-        const recordDate = new Date(record.created_at);
+        const recordDate = new Date(record.createdAt);
         return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
       }).length || 0;
 
       // Count unique patients
-      const uniquePatients = new Set(records?.map(r => r.patient_id)).size;
+      const uniquePatients = new Set(records?.map(r => r.patientId)).size;
 
       // Common diagnoses
       const diagnosisCount: { [key: string]: number } = {};
@@ -185,13 +180,13 @@ export const MedicalAnalytics = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Avg Age</p>
                 <p className="text-3xl font-bold">
-                  {analytics.ageDistribution.reduce((acc, curr) => {
+                  {Math.round(analytics.ageDistribution.reduce((acc, curr) => {
                     const midAge = curr.range === '65+' ? 70 : 
                                   curr.range === '51-65' ? 58 :
                                   curr.range === '36-50' ? 43 :
                                   curr.range === '19-35' ? 27 : 12;
                     return acc + (midAge * curr.count);
-                  }, 0) / analytics.totalPatients || 0}
+                  }, 0) / analytics.totalPatients || 0)}
                 </p>
               </div>
               <Activity className="h-8 w-8 text-primary" />
@@ -242,7 +237,7 @@ export const MedicalAnalytics = () => {
                 <div key={index} className="flex items-center justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-medium">{item.range} years</p>
-                    <Progress value={(item.count / analytics.totalPatients) * 100} className="mt-1" />
+                    <Progress value={(item.count / (analytics.totalPatients || 1)) * 100} className="mt-1" />
                   </div>
                   <Badge variant="outline" className="ml-3">
                     {item.count}
@@ -266,7 +261,7 @@ export const MedicalAnalytics = () => {
                 <div key={index} className="flex items-center justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-medium">{item.gender}</p>
-                    <Progress value={(item.count / analytics.totalPatients) * 100} className="mt-1" />
+                    <Progress value={(item.count / (analytics.totalPatients || 1)) * 100} className="mt-1" />
                   </div>
                   <Badge variant="outline" className="ml-3">
                     {item.count}

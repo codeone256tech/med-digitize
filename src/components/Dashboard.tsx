@@ -346,7 +346,7 @@ export const Dashboard = ({ onNewScan }: DashboardProps) => {
                 <div>
                   <h3 className="font-semibold mb-2">Doctor Information</h3>
                   <p className="text-sm text-muted-foreground">Name: {doctorName}</p>
-                  <p className="text-sm text-muted-foreground">Email: {user?.email}</p>
+                  <p className="text-sm text-muted-foreground">Username: {user?.username}</p>
                 </div>
                 <div className="pt-4 border-t">
                   <Button 

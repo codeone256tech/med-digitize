@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Search, Activity, Calendar, Filter } from 'lucide-react';
+import { ArrowLeft, Search, Activity, Filter } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { apiService } from '@/services/apiService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,10 +17,7 @@ interface AuditLog {
   resource_id: string | null;
   details: any;
   created_at: string;
-  profiles: {
-    doctor_name: string;
-    email: string;
-  };
+  user_name?: string;
 }
 
 interface AuditLogsProps {
@@ -40,35 +37,8 @@ export const AuditLogs = ({ onBack }: AuditLogsProps) => {
 
   const fetchAuditLogs = async () => {
     try {
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
-
-      // Fetch profiles separately to avoid join issues
-      const userIds = [...new Set(data?.map(log => log.user_id))];
-      if (userIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('user_id, doctor_name, email')
-          .in('user_id', userIds);
-
-        // Map profiles to logs
-        const logsWithProfiles = data?.map(log => ({
-          ...log,
-          profiles: profilesData?.find(profile => profile.user_id === log.user_id) || {
-            doctor_name: 'Unknown',
-            email: 'Unknown'
-          }
-        }));
-
-        setLogs(logsWithProfiles || []);
-      } else {
-        setLogs([]);
-      }
+      const data = await apiService.getAuditLogs();
+      setLogs(data);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
       toast({
@@ -84,7 +54,7 @@ export const AuditLogs = ({ onBack }: AuditLogsProps) => {
   const getActionBadge = (action: string) => {
     const colors: { [key: string]: 'default' | 'secondary' | 'destructive' } = {
       CREATE: 'default',
-      UPDATE: 'secondary',
+      UPDATE: 'secondary', 
       DELETE: 'destructive',
       LOGIN: 'default',
       LOGOUT: 'secondary'
@@ -94,7 +64,7 @@ export const AuditLogs = ({ onBack }: AuditLogsProps) => {
 
   const filteredLogs = logs.filter(log => {
     const matchesSearch = 
-      log.profiles?.doctor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.resource_type.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -172,7 +142,7 @@ export const AuditLogs = ({ onBack }: AuditLogsProps) => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Doctor</TableHead>
+                  <TableHead>User</TableHead>
                   <TableHead>Action</TableHead>
                   <TableHead>Resource</TableHead>
                   <TableHead>Details</TableHead>
@@ -191,8 +161,8 @@ export const AuditLogs = ({ onBack }: AuditLogsProps) => {
                     <TableRow key={log.id}>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{log.profiles?.doctor_name}</p>
-                          <p className="text-sm text-muted-foreground">{log.profiles?.email}</p>
+                          <p className="font-medium">{log.user_name || 'Unknown User'}</p>
+                          <p className="text-sm text-muted-foreground">{log.user_id}</p>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -211,11 +181,15 @@ export const AuditLogs = ({ onBack }: AuditLogsProps) => {
                       <TableCell className="max-w-48">
                         {log.details ? (
                           <div className="text-sm">
-                            {Object.entries(log.details).map(([key, value]) => (
-                              <div key={key} className="truncate">
-                                <span className="font-medium">{key}:</span> {String(value)}
-                              </div>
-                            ))}
+                            {typeof log.details === 'string' ? (
+                              <p className="truncate">{log.details}</p>
+                            ) : (
+                              Object.entries(log.details).map(([key, value]) => (
+                                <div key={key} className="truncate">
+                                  <span className="font-medium">{key}:</span> {String(value)}
+                                </div>
+                              ))
+                            )}
                           </div>
                         ) : (
                           '-'

@@ -3,7 +3,7 @@ const API_BASE_URL = 'http://localhost:3001/api'; // Your local backend URL
 
 export interface User {
   id: string;
-  email: string;
+  username: string;
   name: string;
   role: string;
   createdAt: string;
@@ -62,11 +62,11 @@ class APIService {
   }
 
   // Authentication
-  async signIn(email: string, password: string): Promise<AuthResponse> {
+  async signIn(username: string, password: string): Promise<AuthResponse> {
     try {
       const response = await this.request('/auth/signin', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       });
 
       if (response.token) {
@@ -81,11 +81,11 @@ class APIService {
     }
   }
 
-  async signUp(name: string, email: string, password: string): Promise<AuthResponse> {
+  async signUp(name: string, username: string, password: string): Promise<AuthResponse> {
     try {
       const response = await this.request('/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, username, password }),
       });
       return response;
     } catch (error) {

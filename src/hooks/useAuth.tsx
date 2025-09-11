@@ -5,8 +5,8 @@ import { useToast } from '@/components/ui/use-toast';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (name: string, email: string, password: string) => Promise<{ error?: string }>;
+  signIn: (username: string, password: string) => Promise<{ error?: string }>;
+  signUp: (name: string, username: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   doctorName: string | null;
   userRole: string | null;
@@ -32,9 +32,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(false);
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (username: string, password: string) => {
     try {
-      const response = await apiService.signIn(email, password);
+      const response = await apiService.signIn(username, password);
       
       if (response.error) {
         return { error: response.error };
@@ -52,9 +52,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signUp = async (name: string, email: string, password: string) => {
+  const signUp = async (name: string, username: string, password: string) => {
     try {
-      const response = await apiService.signUp(name, email, password);
+      const response = await apiService.signUp(name, username, password);
       
       if (response.error) {
         return { error: response.error };

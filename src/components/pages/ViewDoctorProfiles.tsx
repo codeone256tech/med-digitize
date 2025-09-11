@@ -13,7 +13,7 @@ import { apiService } from '@/services/apiService';
 interface Doctor {
   id: string;
   name: string;
-  email: string;
+  username: string;
   role: string;
   createdAt: string;
 }
@@ -60,7 +60,7 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
       await apiService.logAuditEvent({
         action: 'DELETE',
         resource: 'doctor_profile',
-        details: `Deleted doctor profile: ${doctor.name} (${doctor.email})`
+        details: `Deleted doctor profile: ${doctor.name} (${doctor.username})`
       });
 
       await fetchDoctors();
@@ -80,7 +80,7 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
 
   const filteredDoctors = doctors.filter(doctor =>
     doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doctor.email.toLowerCase().includes(searchTerm.toLowerCase())
+    doctor.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -123,7 +123,7 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Username</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Actions</TableHead>
@@ -140,7 +140,7 @@ export const ViewDoctorProfiles = ({ onBack, onEdit, onAdd }: ViewDoctorProfiles
                   filteredDoctors.map((doctor) => (
                     <TableRow key={doctor.id}>
                       <TableCell className="font-medium">{doctor.name}</TableCell>
-                      <TableCell>{doctor.email}</TableCell>
+                      <TableCell>{doctor.username}</TableCell>
                       <TableCell>
                         <Badge variant={doctor.role === 'admin' ? 'default' : 'secondary'}>
                           {doctor.role}

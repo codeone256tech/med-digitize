@@ -14,14 +14,14 @@ import { format } from 'date-fns';
 
 interface MedicalRecord {
   id: string;
-  patient_id: string;
-  patient_name: string;
-  age: number | null;
-  gender: string | null;
-  date_recorded: string;
-  diagnosis: string | null;
-  prescription: string | null;
-  created_at: string;
+  patientId: string;
+  patientName: string;
+  age: string;
+  gender: string;
+  date: string;
+  diagnosis: string;
+  prescription: string;
+  createdAt: string;
 }
 
 export const PatientSearch = () => {
@@ -49,13 +49,7 @@ export const PatientSearch = () => {
     if (!user) return;
     
     try {
-      const { data, error } = await supabase
-        .from('medical_records')
-        .select('*')
-        .eq('doctor_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await apiService.getMedicalRecords();
       setRecords(data || []);
     } catch (error) {
       console.error('Error fetching records:', error);
@@ -70,8 +64,8 @@ export const PatientSearch = () => {
     // Text search
     if (searchTerm) {
       filtered = filtered.filter(record =>
-        record.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.patient_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.patientId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (record.diagnosis && record.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (record.prescription && record.prescription.toLowerCase().includes(searchTerm.toLowerCase()))
       );
@@ -93,7 +87,7 @@ export const PatientSearch = () => {
     if (ageRange) {
       filtered = filtered.filter(record => {
         if (!record.age) return false;
-        const age = record.age;
+        const age = parseInt(record.age);
         switch (ageRange) {
           case '0-18': return age <= 18;
           case '19-35': return age >= 19 && age <= 35;
@@ -108,7 +102,7 @@ export const PatientSearch = () => {
     // Date range filter
     if (dateRange.from || dateRange.to) {
       filtered = filtered.filter(record => {
-        const recordDate = new Date(record.date_recorded);
+        const recordDate = new Date(record.date);
         if (dateRange.from && recordDate < dateRange.from) return false;
         if (dateRange.to && recordDate > dateRange.to) return false;
         return true;
@@ -130,11 +124,11 @@ export const PatientSearch = () => {
     const csvContent = [
       ['Patient ID', 'Patient Name', 'Age', 'Gender', 'Date', 'Diagnosis', 'Prescription'],
       ...filteredRecords.map(record => [
-        record.patient_id,
-        record.patient_name,
+        record.patientId,
+        record.patientName,
         record.age || '',
         record.gender || '',
-        format(new Date(record.date_recorded), 'yyyy-MM-dd'),
+        format(new Date(record.date), 'yyyy-MM-dd'),
         record.diagnosis || '',
         record.prescription || ''
       ])
@@ -303,8 +297,8 @@ export const PatientSearch = () => {
                 ) : (
                   filteredRecords.map((record) => (
                     <TableRow key={record.id}>
-                      <TableCell className="font-mono">{record.patient_id}</TableCell>
-                      <TableCell className="font-medium">{record.patient_name}</TableCell>
+                      <TableCell className="font-mono">{record.patientId}</TableCell>
+                      <TableCell className="font-medium">{record.patientName}</TableCell>
                       <TableCell>{record.age || '-'}</TableCell>
                       <TableCell>
                         {record.gender ? (
@@ -312,7 +306,7 @@ export const PatientSearch = () => {
                         ) : '-'}
                       </TableCell>
                       <TableCell>
-                        {format(new Date(record.date_recorded), 'MM/dd/yyyy')}
+                        {format(new Date(record.date), 'MM/dd/yyyy')}
                       </TableCell>
                       <TableCell className="max-w-48 truncate">
                         {record.diagnosis || '-'}
